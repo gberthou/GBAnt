@@ -59,9 +59,6 @@ void ARMcpu::Run(void)
 	for(;;)
 	{
 		u_int32_t pcValue = regSet.GetValue(PC);
-		std::cout << "SP: ";
-		PrintHex(regSet.GetValue(SP));
-		std::cout << std::endl;
 
 		if(!thumbMode)
 		{

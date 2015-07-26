@@ -2,6 +2,7 @@
 #include <fstream>
 
 #include "GBAcpu.h"
+#include "../peripherals/peripherals.h"
 
 #define GBA_ROM_LOADER_BUF_SIZE 1024
 
@@ -19,7 +20,7 @@ GBAcpu::GBAcpu():
 
 	/* ### IO ### */
 
-	mem.AddMemory(new PhysicalMemory(0x040000B0, 0x040000E3)); // DMA
+	mem.AddMemory(new DMA(0x040000B0, 0x040000E3));
 	mem.AddMemory(new PhysicalMemory(0x04000200, 0x040003FE)); // Interrupt, waitsait
 }
 

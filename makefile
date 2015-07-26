@@ -18,7 +18,8 @@ CFLAGS=-Wall -Wextra -Werror
 INCLUDE=
 LIB=
 
-CFILES=$(wildcard $(SRCDIR)/*.cpp) $(wildcard $(SRCDIR)/core/*.cpp)
+CFILES=$(wildcard $(SRCDIR)/*.cpp) $(wildcard $(SRCDIR)/core/*.cpp) $(wildcard $(SRCDIR)/peripherals/*.cpp)
+
 
 OBJ=$(patsubst $(SRCDIR)/%.cpp,$(OBJDIR)/%.o,$(CFILES))
 
@@ -32,10 +33,6 @@ FLAGSDEBUG=-g -pg
 FLAGSRELEASE=-O2
 LIBS=
 
-.PHONY: build
-build:
-	mkdir -p $(DEBUGDIR) $(DEBUGDIR)/$(BINDIR) $(DEBUGDIR)/$(OBJDIR)
-	mkdir -p $(RELEASEDIR) $(RELEASEDIR)/$(BINDIR) $(RELEASEDIR)/$(OBJDIR)
 
 $(DEBUG): $(OBJDEBUG)
 	$(GPP) -o $(BINDEBUG) $(OBJDEBUG) $(LIB) $(LIBS)
@@ -45,6 +42,11 @@ $(RELEASE): $(OBJRELEASE)
 
 $(CLEAN):
 	rm -f $(BINDEBUG) $(BINRELEASE) $(OBJDEBUG) $(OBJRELEASE)
+
+.PHONY: build
+build:
+	mkdir -p $(DEBUGDIR) $(DEBUGDIR)/$(BINDIR) $(DEBUGDIR)/$(BINDIR)/core $(DEBUGDIR)/$(BINDIR)/peripherals $(DEBUGDIR)/$(OBJDIR) $(DEBUGDIR)/$(OBJDIR)/core $(DEBUGDIR)/$(OBJDIR)/peripherals
+	mkdir -p $(RELEASEDIR) $(RELEASEDIR)/$(BINDIR) $(RELEASEDIR)/$(BINDIR)/core $(RELEASEDIR)/$(BINDIR)/peripherals $(RELEASEDIR)/$(OBJDIR) $(RELEASEDIR)/$(OBJDIR)/core $(RELEASEDIR)/$(OBJDIR)/peripherals
 
 $(DEBUGDIR)/$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	$(GPP) $(CFLAGS) $(FLAGSDEBUG) $(INCLUDE) -c -o $@ $<
