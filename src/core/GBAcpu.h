@@ -14,6 +14,8 @@ class GBAcpu : public ARMcpu
 
 	protected:
 		PhysicalMemory *cartridge;
+
+	friend class DMA;
 };
 
 #endif

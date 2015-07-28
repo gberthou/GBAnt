@@ -3,6 +3,7 @@
 
 #include "../core/Memory.h"
 #include "../core/utils.h"
+#include "../core/GBAcpu.h"
 
 #define DMA_CHANNELS_COUNT 4
 
@@ -25,7 +26,7 @@ enum DMA_TriggerSource
 class DMA : public Memory
 {
 	public:
-		DMA(u_int32_t bAddress, u_int32_t eAddress);
+		DMA(u_int32_t bAddress, u_int32_t eAddress, GBAcpu *gba);
 		virtual ~DMA();
 		
 		virtual bool Write(u_int32_t address, u_int32_t value, MemoryAccess memAccess = MA32);
@@ -34,6 +35,9 @@ class DMA : public Memory
 		void Trigger(DMA_TriggerSource source);
 
 	private:
+		bool step(unsigned int index);
+		
+		GBAcpu * const gba;
 		DMA_Channel channels[DMA_CHANNELS_COUNT];
 		DMA_Channel tmp[DMA_CHANNELS_COUNT];
 };
