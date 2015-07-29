@@ -93,31 +93,41 @@ void DMA::Trigger(DMA_TriggerSource source)
 
 bool DMA::step(unsigned int index)
 {
-	u_int32_t value;
-	u_int16_t ctrl = tmp[index].control;
-	unsigned int bitcount = ((ctrl >> 10) & 1) ? 32 : 16;
-	unsigned int srcCtrl = (ctrl >> 7) & 3;
-	unsigned int dstCtrl = (ctrl >> 5) & 3;
-
-	gba->mem.Read(tmp[index].src, value, bitcount == 16 ? MA16 : MA32);
-	gba->mem.Write(tmp[index].dst, value, bitcount == 16 ? MA16 : MA32);
-
-	if(srcCtrl == 0) // Increment
-		tmp[index].src += bitcount / 8;	
-	else if(srcCtrl == 1) // Decrement
-		tmp[index].src -= bitcount / 8;	
-	else if(srcCtrl == 3) // Prohibited
-		std::cerr << "DMA src control prohibited" << std::endl;
-
-	if(dstCtrl == 0 || dstCtrl == 3) // Increment
+	if(tmp[index].wordCount)
 	{
-		tmp[index].dst += bitcount / 8;
-		if(dstCtrl == 3)
-			std::cerr << "DMA dst reload not supported yet" << std::endl;
-	}
-	else if(dstCtrl == 1) // Decrement
-		tmp[index].dst -= bitcount / 8;	
+		u_int32_t value;
+		u_int16_t ctrl = tmp[index].control;
+		unsigned int bitcount = ((ctrl >> 10) & 1) ? 32 : 16;
+		unsigned int srcCtrl = (ctrl >> 7) & 3;
+		unsigned int dstCtrl = (ctrl >> 5) & 3;
+		
 
-	return --tmp[index].wordCount > 0;
+		gba->mem.Read(tmp[index].src, value, bitcount == 16 ? MA16 : MA32);
+		gba->mem.Write(tmp[index].dst, value, bitcount == 16 ? MA16 : MA32);
+
+		if(srcCtrl == 0) // Increment
+			tmp[index].src += bitcount / 8;	
+		else if(srcCtrl == 1) // Decrement
+			tmp[index].src -= bitcount / 8;	
+		else if(srcCtrl == 3) // Prohibited
+			std::cerr << "DMA src control prohibited" << std::endl;
+
+		if(dstCtrl == 0 || dstCtrl == 3) // Increment
+		{
+			tmp[index].dst += bitcount / 8;
+			if(dstCtrl == 3)
+				std::cerr << "DMA dst reload not supported yet" << std::endl;
+		}
+		else if(dstCtrl == 1) // Decrement
+			tmp[index].dst -= bitcount / 8;	
+
+		if(--tmp[index].wordCount)
+			return true;
+
+		// Here, wordCount == 0
+		if(!((ctrl >> 9) & 1)) // if not repeat
+			channels[index].control &= 0x7FFF; // Clear enable bit
+	}
+	return false;
 }
 
