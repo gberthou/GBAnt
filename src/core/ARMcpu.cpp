@@ -42,6 +42,20 @@ inline u_int32_t ror(u_int32_t x, u_int32_t n)
 	return (x << (32 - n)) | (x >> n);
 }
 
+static void printRegisters(const RegisterSet &regSet, u_int8_t rlist)
+{
+	for(unsigned i = 0; i < 8; ++i)
+	{
+		if((rlist >> i) & 1)
+		{
+			PrintRegister(i);
+			std::cout << ": ";
+			PrintHex(regSet.GetValue(i));
+			std::cout << std::endl;
+		}
+	}
+}
+
 ARMcpu::ARMcpu(u_int32_t bAddress):
 	thumbMode(false),
 	baseAddress(bAddress),
@@ -85,11 +99,7 @@ void ARMcpu::Run(void)
 				lock = true;
 			std::cout << std::endl;
 		}
-		
-		//if(pcValue == baseAddress + 0xda820)
-		//if(pcValue == baseAddress + 0xdbebc)
-		//if(pcValue == baseAddress + 0xda822)
-		//	lock = true;
+
 		if(lock)
 			getchar();
 	}
@@ -872,16 +882,19 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 			case IT_T_PUSHPOP:
 			{
 				InstTPushPop *pp = &inst.data.pp;
-				unsigned int i;
 				u_int32_t spv = regSet.GetValue(SP);
 				u_int32_t value;
 
 				if(pp->op) // POP
 				{
-					for(i = 0; i < 8; ++i)
+					printRegisters(regSet, pp->rlist);
+					for(unsigned i = 0; i < 8; ++i)
 					{
 						if((pp->rlist >> i) & 1) // Register must be popped
 						{
+							std::cout << "Popping value @";
+							PrintHex(spv);
+							std::cout << std::endl;
 							mem.Read(spv, value);
 							regSet.SetValue(i, value);
 							spv += 4;
@@ -898,31 +911,56 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 							thumbMode = false;
 						*/
 					}
+					for(unsigned int i = 0; i < 16; ++i)
+						std::cout << '-';
+					std::cout << std::endl;
+					printRegisters(regSet, pp->rlist);
 				}
 				else // PUSH
 				{
-					for(i = 0; i < 8; ++i)
+					printRegisters(regSet, pp->rlist);
+					if(pp->pclr)
+					{
+						std::cout << "lr: ";
+						PrintHex(regSet.GetValue(LR));
+						std::cout << std::endl;
+					}
+					
+					for(unsigned i = 0; i < 8; ++i)
 					{
 						if((pp->rlist >> i) & 1) // Register must be pushed
 						{
-							mem.Write(spv, regSet.GetValue(i));
 							spv -= 4;
+							std::cout << "Pushing value @";
+							PrintHex(spv);
+							std::cout << std::endl;
+							mem.Write(spv, regSet.GetValue(i));
 						}
 					}
 					if(pp->pclr) // LR must me pushed
 					{
-						mem.Write(spv, regSet.GetValue(LR));
 						spv -= 4;
+						std::cout << "PUSH @";
+					   	PrintHex(spv);
+						std::cout << " LR = ";
+						PrintHex(regSet.GetValue(LR));
+						std::cout << std::endl;
+						mem.Write(spv, regSet.GetValue(LR));
 					}
 				}
 				regSet.SetValue(SP, spv);
-				pcValue += 2;
+				if(!pp->op || !pp->pclr)
+					pcValue += 2;
 				break;
 			}
 
 			case IT_T_MULTIPLE:
 			{
 				u_int32_t rbv = regSet.GetValue(inst.data.m.rb);
+				PrintRegister(inst.data.m.rb);
+				std::cout << ": ";
+				PrintHex(rbv);
+				std::cout << std::endl;
 				if(inst.data.m.op) // LDM
 				{
 					for(unsigned int i = 0; i < 8; ++i)

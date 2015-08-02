@@ -76,7 +76,7 @@ class RegisterSet
 		virtual ~RegisterSet();
 
 		void SetValue(unsigned int regId, u_int32_t value);
-		u_int32_t GetValue(unsigned int regId);
+		u_int32_t GetValue(unsigned int regId) const;
 		
 		void SetMode(ARMRegSet mode);
 

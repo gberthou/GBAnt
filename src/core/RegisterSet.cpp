@@ -14,7 +14,7 @@ void RegisterSet::SetValue(unsigned int regId, u_int32_t value)
 	registers[regId] = value;
 }
 
-u_int32_t RegisterSet::GetValue(unsigned int regId)
+u_int32_t RegisterSet::GetValue(unsigned int regId) const
 {
 	return registers[regId];
 }

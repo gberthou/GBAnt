@@ -19,16 +19,6 @@ bool DMA::Write(u_int32_t address, u_int32_t value, MemoryAccess memAccess)
 {
 	if(address >= bAddress && address <= eAddress)
 	{
-		for(unsigned int i = 0; i < (memAccess == MA32 ? 2 : 1); ++i)
-		{
-			unsigned int shift = i * 16;
-			std::cerr << "DMA write @";
-			PrintHex(address + i * 2, 32, std::cerr);
-			std::cerr << ", ";
-			PrintHex((value >> shift) & 0xFFFF, memAccess == MA32 ? 32 : 16, std::cerr);
-			std::cerr << std::endl;
-		}
-
 		if(memAccess == MA16)
 		{
 			u_int16_t *data = reinterpret_cast<u_int16_t*>(channels);

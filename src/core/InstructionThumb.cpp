@@ -135,7 +135,7 @@ bool DecodeInstructionThumb(u_int16_t code, InstructionThumb &instruction)
 			{
 				instruction.type = IT_T_BRANCH_COND;
 				instruction.data.bc.cond = (code >> 8) & 0xF;
-				instruction.data.bc.offset = Unsigned2Signed(code & 0xF, 8) * 2 + 4;
+				instruction.data.bc.offset = Unsigned2Signed(code & 0xFF, 7) * 2 + 4;
 			}
 			else // STM/LDM
 			{
