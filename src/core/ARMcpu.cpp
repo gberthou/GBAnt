@@ -888,6 +888,19 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 				if(pp->op) // POP
 				{
 					printRegisters(regSet, pp->rlist);
+					for(unsigned i = 8; i;)
+					{
+						--i;
+						if((pp->rlist >> i) & 1) // Register must be popped
+						{
+							std::cout << "Popping value @";
+							PrintHex(spv);
+							std::cout << std::endl;
+							mem.Read(spv, value);
+							regSet.SetValue(i, value);
+							spv += 4;
+						}
+					}
 					if(pp->pclr) // PC must me popped
 					{
 						mem.Read(spv, value);
@@ -901,19 +914,6 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						if(!(value & 1))
 							thumbMode = false;
 						*/
-					}
-					for(unsigned i = 8; i;)
-					{
-						--i;
-						if((pp->rlist >> i) & 1) // Register must be popped
-						{
-							std::cout << "Popping value @";
-							PrintHex(spv);
-							std::cout << std::endl;
-							mem.Read(spv, value);
-							regSet.SetValue(i, value);
-							spv += 4;
-						}
 					}
 					for(unsigned int i = 0; i < 16; ++i)
 						std::cout << '-';
@@ -930,6 +930,16 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						std::cout << std::endl;
 					}
 					
+					if(pp->pclr) // LR must me pushed
+					{
+						spv -= 4;
+						std::cout << "PUSH @";
+					   	PrintHex(spv);
+						std::cout << " LR = ";
+						PrintHex(regSet.GetValue(LR));
+						std::cout << std::endl;
+						mem.Write(spv, regSet.GetValue(LR));
+					}
 					for(unsigned i = 0; i < 8; ++i)
 					{
 						if((pp->rlist >> i) & 1) // Register must be pushed
@@ -940,16 +950,6 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 							std::cout << std::endl;
 							mem.Write(spv, regSet.GetValue(i));
 						}
-					}
-					if(pp->pclr) // LR must me pushed
-					{
-						spv -= 4;
-						std::cout << "PUSH @";
-					   	PrintHex(spv);
-						std::cout << " LR = ";
-						PrintHex(regSet.GetValue(LR));
-						std::cout << std::endl;
-						mem.Write(spv, regSet.GetValue(LR));
 					}
 				}
 				regSet.SetValue(SP, spv);

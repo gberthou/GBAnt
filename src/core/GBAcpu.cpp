@@ -22,6 +22,7 @@ GBAcpu::GBAcpu():
 
 	mem.AddMemory(new DMA(0x040000B0, 0x040000E3, this));
 	mem.AddMemory(new Sound(0x04000060, 0x040000AB));
+	mem.AddMemory(new Timer(0x04000100, 0x0400010F));
 	mem.AddMemory(new PhysicalMemory(0x04000200, 0x040003FE)); // Interrupt, waitsait
 }
 
