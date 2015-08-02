@@ -888,8 +888,23 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 				if(pp->op) // POP
 				{
 					printRegisters(regSet, pp->rlist);
-					for(unsigned i = 0; i < 8; ++i)
+					if(pp->pclr) // PC must me popped
 					{
+						mem.Read(spv, value);
+						std::cout << "POP PC = ";
+						PrintHex(value);
+						std::cout << std::endl;
+						pcValue = value & 0xFFFFFFFE;
+						spv += 4;
+				
+						/* Do not update thumb mode?	
+						if(!(value & 1))
+							thumbMode = false;
+						*/
+					}
+					for(unsigned i = 8; i;)
+					{
+						--i;
 						if((pp->rlist >> i) & 1) // Register must be popped
 						{
 							std::cout << "Popping value @";
@@ -899,17 +914,6 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 							regSet.SetValue(i, value);
 							spv += 4;
 						}
-					}
-					if(pp->pclr) // PC must me popped
-					{
-						mem.Read(spv, value);
-						regSet.SetValue(PC, value & 0xFFFFFFFE);
-						spv += 4;
-				
-						/* Do not update thumb mode?	
-						if(!(value & 1))
-							thumbMode = false;
-						*/
 					}
 					for(unsigned int i = 0; i < 16; ++i)
 						std::cout << '-';
