@@ -62,7 +62,9 @@ class Sound : public Memory
 
 		virtual bool Write(u_int32_t address, u_int32_t value, MemoryAccess memAccess = MA32);
 		virtual bool Read(u_int32_t address, u_int32_t &value, MemoryAccess memAccess = MA32);
-	
+
+		void Trigger(void);
+
 	private:
 		SoundData snd;
 };
