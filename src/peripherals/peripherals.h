@@ -4,6 +4,7 @@
 #include "dma.h"
 #include "sound.h"
 #include "timer.h"
+#include "lcd.h"
 
 #endif
 
