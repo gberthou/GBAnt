@@ -761,6 +761,8 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						pcValue = rsv & 0xFFFFFFFE;
 						if(!(rsv & 1)) // Switch to ARM mode
 							thumbMode = false;
+						if(inst.data.hr.rs == PC)
+							pcValue += 4;
 						break;	
 					}
 
