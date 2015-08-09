@@ -21,7 +21,7 @@ bool DecodeInstructionThumb(u_int16_t code, InstructionThumb &instruction)
 			{
 				instruction.type = IT_T_ADDSUB;
 				instruction.data.as.op = (code >> 9) & 0x3;
-				instruction.data.as.nn = (code >> 6) & 0x3;
+				instruction.data.as.nn = (code >> 6) & 0x7;
 				instruction.data.as.rs = (code >> 3) & 0x7;
 				instruction.data.as.rd = code & 0x7;
 			}
@@ -206,7 +206,7 @@ void PrintInstructionThumb(u_int32_t pcv, const InstructionThumb &instruction)
 		
 		case IT_T_ADDSUB:
 			if(instruction.data.as.op & 1)
-				std::cout << "sub ";
+				std::cout << "subs ";
 			else
 				std::cout << "adds ";
 			PrintRegister(instruction.data.as.rd);
