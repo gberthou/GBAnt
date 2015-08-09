@@ -3,7 +3,6 @@
 
 #include "../core/Memory.h"
 #include "../core/utils.h"
-#include "../core/GBAcpu.h"
 
 #define DMA_CHANNELS_COUNT 4
 
@@ -22,6 +21,8 @@ enum DMA_TriggerSource
 	DMA_TS_HBLANK,
 	DMA_TS_SPECIAL
 };
+
+class GBAcpu;
 
 class DMA : public Memory
 {

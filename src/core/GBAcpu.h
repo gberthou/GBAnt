@@ -2,6 +2,7 @@
 #define GBA_CPU_H
 
 #include "ARMcpu.h"
+#include "../peripherals/peripherals.h"
 
 class GBAcpu : public ARMcpu
 {
@@ -13,7 +14,12 @@ class GBAcpu : public ARMcpu
 		virtual void Run(void);
 
 	protected:
+		virtual void onClock(void);
+
 		PhysicalMemory *cartridge;
+		
+		// Peripherals
+		Lcd *lcd;
 
 	friend class DMA;
 };

@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "dma.h"
+#include "../core/GBAcpu.h"
 
 DMA::DMA(u_int32_t bAddress, u_int32_t eAddress, GBAcpu *gb):
 	Memory(bAddress, eAddress),

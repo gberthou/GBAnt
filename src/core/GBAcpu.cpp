@@ -17,13 +17,16 @@ GBAcpu::GBAcpu():
 	mem.AddMemory(new PhysicalMemory(0x06000000, 0x06017FFF)); // VRAM - 96 kB
 	mem.AddMemory(new PhysicalMemory(0x07000000, 0x070003FF)); //OAM - 1 kB
 	mem.AddMemory(cartridge = new PhysicalMemory(0x08000000, 0x09FFFFFF)); // Cartridge - 32 MB
+	mem.AddMemory(new PhysicalMemory(0x0E000000, 0x0E00FFFF)); // SRAM 64 kB
 
 	/* ### IO ### */
 
-	mem.AddMemory(new Lcd  (0x04000000, 0x04000057));
+	mem.AddMemory(lcd = new Lcd(0x04000000, 0x04000057));
 	mem.AddMemory(new Sound(0x04000060, 0x040000AB));
 	mem.AddMemory(new DMA  (0x040000B0, 0x040000E3, this));
 	mem.AddMemory(new Timer(0x04000100, 0x0400010F));
+	mem.AddMemory(new PhysicalMemory(0x04000110, 0x0400011F)); // Unused
+	mem.AddMemory(new PhysicalMemory(0x0400015A, 0x040001FF)); // Unused
 	mem.AddMemory(new PhysicalMemory(0x04000200, 0x040003FE)); // Interrupt, waitsait
 }
 
@@ -71,5 +74,12 @@ void GBAcpu::Run(void)
 	regSet.SetValue(SP, 0); // TODO: change value
 	regSet.SetValue(CPSR, 0); // TODO: change value
 	ARMcpu::Run();
+}
+
+void GBAcpu::onClock(void)
+{
+	ARMcpu::onClock();
+	
+	lcd->OnClock();
 }
 

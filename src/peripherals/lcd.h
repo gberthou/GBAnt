@@ -4,6 +4,7 @@
 #include <sys/types.h>
 
 #include "../core/Memory.h"
+#include "video.h"
 
 #define LCD_BG_COUNT 4
 #define LCD_ROTSCALE_BG_COUNT 2
@@ -57,9 +58,15 @@ class Lcd : public Memory
 		virtual bool Read(u_int32_t address, u_int32_t &value, MemoryAccess memAccess = MA32);
 
 		void Trigger(void);
+		void OnClock(void);
+		void Render(void);
 
 	private:
+		void printStatus(void);
+		
 		LcdData lcd;
+		Background backgrounds[LCD_BG_COUNT];
+		u_int32_t cmpt;
 };
 
 #endif

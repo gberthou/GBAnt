@@ -21,6 +21,8 @@ class ARMcpu
 		virtual void Run(void);
 	
 	protected:
+		virtual void onClock(void);
+		
 		void executeInstruction(u_int32_t instruction);
 		void alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op2, StatusBit shiftCarry);
 		void aluThumbRegister(u_int8_t op, u_int8_t rd, u_int8_t rs);
@@ -31,7 +33,8 @@ class ARMcpu
 
 		bool thumbMode;
 		RegisterSet regSet;
-		
+		u_int32_t cycles;
+
 		// Memory
 		u_int32_t baseAddress;
 		MemoryContainer mem;

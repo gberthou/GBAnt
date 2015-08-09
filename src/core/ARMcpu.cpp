@@ -58,6 +58,7 @@ static void printRegisters(const RegisterSet &regSet, u_int8_t rlist)
 
 ARMcpu::ARMcpu(u_int32_t bAddress):
 	thumbMode(false),
+	cycles(0),
 	baseAddress(bAddress),
 	mem(0, 0x0FFFFFFF)
 {
@@ -100,9 +101,16 @@ void ARMcpu::Run(void)
 			std::cout << std::endl;
 		}
 
+		onClock();
+
 		if(lock)
 			getchar();
 	}
+}
+
+void ARMcpu::onClock(void)
+{
+	++cycles;
 }
 
 void ARMcpu::executeInstruction(u_int32_t instruction)
