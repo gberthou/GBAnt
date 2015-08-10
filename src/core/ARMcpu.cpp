@@ -240,7 +240,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 				{
 					if(inst.data.b.l) // link
 						regSet.SetValue(LR, pcValue + 4);
-					pcValue += 8 + inst.data.b.offset * 4; // warning: don't shift offset as it's signed
+					pcValue += 8 + inst.data.b.offset;
 				}
 				break;
 
