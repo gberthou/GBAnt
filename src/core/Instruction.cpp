@@ -103,7 +103,16 @@ bool DecodeInstruction(u_int32_t code, Instruction &instruction)
 			break;
 
 		case 4:
-			break;
+			instruction.type = IT_BLOCK_TRANS;
+			instruction.data.bt.cond = code >> 28;
+			instruction.data.bt.p = (code >> 24) & 1;
+			instruction.data.bt.u = (code >> 23) & 1;
+			instruction.data.bt.s = (code >> 22) & 1;
+			instruction.data.bt.w = (code >> 21) & 1;
+			instruction.data.bt.l = (code >> 20) & 1;
+			instruction.data.bt.rn = (code >> 16) & 0xF;
+			instruction.data.bt.rlist = code & 0xFFFF;
+			return true;
 
 		case 5:
 		{
@@ -271,9 +280,41 @@ void PrintInstruction(const Instruction &instruction)
 			return;
 		}
 
-		case IT_UNKNOWN:
-			std::cerr << "Unknown instruction" << std::endl;
+		case IT_BLOCK_TRANS:
+		{
+			bool first = true;
+
+			if(!instruction.data.bt.l && !instruction.data.bt.u && instruction.data.bt.p)
+				std::cout << "push";
+			else if(instruction.data.bt.l && instruction.data.bt.u && !instruction.data.bt.p)
+				std::cout << "pop";
+			else
+			{
+				std::cout << (instruction.data.bt.l ? "ldm" : "stm");
+				std::cout << (instruction.data.bt.u ? 'i' : 'd');
+				std::cout << (instruction.data.bt.p ? 'b' : 'a');
+				PrintCondition(instruction.data.bt.cond);
+				std::cout << ' ';
+				PrintRegister(instruction.data.bt.rn);
+				if(instruction.data.bt.w)
+					std::cout << '!';
+				std::cout << ',';
+			}
+
+			std::cout << " {";
+			for(unsigned int i = 0; i < 16; ++i)
+				if((instruction.data.bt.rlist >> i) & 1)
+				{
+					if(!first)
+						std::cout << ',';
+					PrintRegister(i);
+					first = false;
+				}
+			std::cout << '}';
+			if(instruction.data.bt.s)
+				std::cout << '^';
 			return;
+		}
 
 		default:
 			break;

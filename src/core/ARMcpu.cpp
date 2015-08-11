@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdio>
+#include <cstdlib>
 
 #include "ARMcpu.h"
 #include "Instruction.h"
@@ -314,6 +315,58 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 				pcValue += 4;
 				break;
 
+			case IT_BLOCK_TRANS:
+			{
+				InstBlockTrans *bt = &inst.data.bt;
+				if(testCondition(bt->cond))
+				{
+					unsigned int delta = bt->u ? 4 : -4;
+					unsigned int rnv = regSet.GetValue(bt->rn);
+					u_int32_t value;
+
+					// TODO: Write-back and PSR bits
+					
+					if(bt->l) // LDM
+					{
+						for(unsigned int i = 16; i;)
+						{
+							--i;
+							if((bt->rlist >> i) & 1)
+							{
+								if(bt->p)
+									rnv += delta;
+
+								mem.Read(rnv, value);
+								regSet.SetValue(i, value);
+
+								if(!bt->p)
+									rnv += delta;
+							}
+						}
+					}
+					else // STM
+					{
+						for(unsigned int i = 0; i < 16; ++i)
+						{
+							if((bt->rlist >> i) & 1)
+							{
+								if(bt->p)
+									rnv += delta;
+
+								mem.Write(rnv, regSet.GetValue(i));
+
+								if(!bt->p)
+									rnv += delta;
+							}
+						}
+					}
+
+					regSet.SetValue(bt->rn, rnv);
+				}
+				pcValue += 4;
+				break;
+			}
+
 			default:
 				std::cerr << "Instruction not supported yet" << std::endl;
 				pcValue += 4;
@@ -325,6 +378,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 	else
 	{
 		std::cerr << "Unknown instruction..." << std::endl;
+		exit(0);
 	}
 }
 

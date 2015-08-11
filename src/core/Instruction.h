@@ -197,7 +197,7 @@ typedef struct
 	u_int8_t w;
 	u_int8_t l;
 	u_int8_t rn;
-	u_int16_t registerList;
+	u_int16_t rlist;
 } InstBlockTrans;
 
 typedef struct
