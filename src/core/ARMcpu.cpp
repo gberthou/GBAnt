@@ -270,18 +270,16 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 
 					// TODO: manage byte access
 
-					std::cout << (inst.data.ti9.p ? "pre " : "post ");
-					if(inst.data.ti9.w)
-						std::cout << "w ";
-					std::cout << std::endl;
-
 					if(inst.data.ti9.b)
 						std::cout << "Zut... byte :(" << std::endl;
 
-					if(inst.data.ti9.u) // Up => add offset
-						address += inst.data.ti9.offset;
-					else // Down => subtract offset
-						address -= inst.data.ti9.offset;
+					if(inst.data.ti9.p) // Pre
+					{
+						if(inst.data.ti9.u) // Up => add offset
+							address += inst.data.ti9.offset;
+						else // Down => subtract offset
+							address -= inst.data.ti9.offset;
+					}
 
 					if(inst.data.ti9.rn == PC)
 						address += 8;
@@ -311,7 +309,19 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 							return;
 						}
 					}
+				
+					if(!inst.data.ti9.p) // Pre
+					{
+						if(inst.data.ti9.u) // Up => add offset
+							address += inst.data.ti9.offset;
+						else // Down => subtract offset
+							address -= inst.data.ti9.offset;
+					}
+				
+					if(!inst.data.ti9.p || inst.data.ti9.w) // Write-back
+						regSet.SetValue(inst.data.ti9.rn, address);
 				}
+
 				pcValue += 4;
 				break;
 
@@ -324,13 +334,12 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 					unsigned int rnv = regSet.GetValue(bt->rn);
 					u_int32_t value;
 
-					// TODO: Write-back and PSR bits
+					// TODO: PSR bit
 					
 					if(bt->l) // LDM
 					{
-						for(unsigned int i = 16; i;)
+						for(unsigned int i = 0; i < 16; ++i)
 						{
-							--i;
 							if((bt->rlist >> i) & 1)
 							{
 								if(bt->p)
@@ -361,7 +370,8 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 						}
 					}
 
-					regSet.SetValue(bt->rn, rnv);
+					if(bt->w) // Write-back
+						regSet.SetValue(bt->rn, rnv);
 				}
 				pcValue += 4;
 				break;
