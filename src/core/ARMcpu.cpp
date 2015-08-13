@@ -74,44 +74,53 @@ void ARMcpu::Run(void)
 	bool lock = false;
 	for(;;)
 	{
-		u_int32_t pcValue = regSet.GetValue(PC);
-
-		if(!thumbMode)
-		{
-			u_int32_t inst;
-
-			mem.Read(pcValue, inst);
-
-			std::cout << "@";
-			PrintHex(pcValue);
-			std::cout << ": ";
-			executeInstruction(inst);
-			std::cout << std::endl;
-		}
-		else
-		{
-			u_int32_t inst;
-
-			mem.Read(pcValue, inst, MA16);
-
-			std::cout << "@";
-			PrintHex(pcValue);
-			std::cout << ": ";
-			if(!executeInstructionThumb(inst))
-				lock = true;
-			std::cout << std::endl;
-		}
-
-		onClock();
+		runStep();
 
 		if(lock)
 			getchar();
 	}
 }
 
+void ARMcpu::runStep(void)
+{
+	u_int32_t pcValue = regSet.GetValue(PC);
+
+	if(!thumbMode)
+	{
+		u_int32_t inst;
+
+		mem.Read(pcValue, inst);
+
+		std::cout << "@";
+		PrintHex(pcValue);
+		std::cout << ": ";
+		executeInstruction(inst);
+		std::cout << std::endl;
+	}
+	else
+	{
+		u_int32_t inst;
+
+		mem.Read(pcValue, inst, MA16);
+
+		std::cout << "@";
+		PrintHex(pcValue);
+		std::cout << ": ";
+		executeInstructionThumb(inst);
+		std::cout << std::endl;
+	}
+
+	onClock();
+}
+
 void ARMcpu::onClock(void)
 {
 	++cycles;
+}
+
+bool ARMcpu::interruptsEnabled(void)
+{
+	return (regSet.GetValue(CPSR) & (1 << 7)) == 0;
 }
 
 void ARMcpu::executeInstruction(u_int32_t instruction)
@@ -717,7 +726,7 @@ bool ARMcpu::testCondition(u_int8_t condition)
 	}
 }
 
-bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
+void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 {
 	InstructionThumb inst;
 
@@ -727,7 +736,6 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 	if(DecodeInstructionThumb(instruction, inst))
 	{
 		u_int32_t pcValue = regSet.GetValue(PC);
-		bool supported = false;
 
 		PrintInstructionThumb(pcValue, inst);
 		std::cout << std::endl;
@@ -1124,16 +1132,12 @@ bool ARMcpu::executeInstructionThumb(u_int16_t instruction)
 			default:
 				std::cerr << "Instruction not supported yet" << std::endl;
 				pcValue += 2;
-				supported = false;
 				break;
 		}
 		
 		regSet.SetValue(PC, pcValue);
-		return !supported;
 	}
 	else
 		std::cerr << "Unknown thumb instruction" << std::endl;
-	
-	return false;
 }
 

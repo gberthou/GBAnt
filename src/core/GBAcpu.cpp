@@ -100,6 +100,30 @@ void GBAcpu::TriggerInterrupt(GBA_InterruptSource source)
 	}
 }
 
+void GBAcpu::runStep(void)
+{
+	if(interruptsEnabled())
+	{
+		// TODO: Check all interrupt sources
+	
+		// LCD
+		if(lcd->MustTriggerInterrupt(GBA_IS_LCD_VBLANK))
+		{
+			std::cout << "VBLANK IRQ HAPPENS NOW!" << std::endl;
+		}
+		if(lcd->MustTriggerInterrupt(GBA_IS_LCD_HBLANK))
+		{
+			std::cout << "HBLANK IRQ HAPPENS NOW!" << std::endl;
+		}
+		if(lcd->MustTriggerInterrupt(GBA_IS_LCD_VCOUNTER_MATCH))
+		{
+			std::cout << "VCOUNTER IRQ HAPPENS NOW!" << std::endl;
+		}
+	}
+
+	ARMcpu::runStep();
+}
+
 void GBAcpu::onClock(void)
 {
 	ARMcpu::onClock();
@@ -109,8 +133,12 @@ void GBAcpu::onClock(void)
 
 bool GBAcpu::interruptsEnabled(void)
 {
-	u_int32_t ime;
-	mem.Read(GBA_IME, ime);
-	return (ime & 1) != 0;
+	if(ARMcpu::interruptsEnabled())
+	{
+		u_int32_t ime;
+		mem.Read(GBA_IME, ime);
+		return (ime & 1) != 0;
+	}
+	return false;
 }
 

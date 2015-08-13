@@ -4,6 +4,7 @@
 #include <sys/types.h>
 
 #include "../core/Memory.h"
+#include "../core/irq.h"
 #include "video.h"
 
 #define LCD_BG_COUNT 4
@@ -61,12 +62,15 @@ class Lcd : public Memory
 		void OnClock(void);
 		void Render(void);
 
+		bool MustTriggerInterrupt(GBA_InterruptSource source);
+
 	private:
 		void printStatus(void);
 		
 		LcdData lcd;
 		Background backgrounds[LCD_BG_COUNT];
 		u_int32_t cmpt;
+		u_int32_t hcmpt;
 };
 
 #endif

@@ -21,13 +21,15 @@ class ARMcpu
 		virtual void Run(void);
 	
 	protected:
+		virtual void runStep(void);
 		virtual void onClock(void);
+		virtual bool interruptsEnabled(void);
 		
 		void executeInstruction(u_int32_t instruction);
 		void alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op2, StatusBit shiftCarry);
 		void aluThumbRegister(u_int8_t op, u_int8_t rd, u_int8_t rs);
 		void aluThumbImm(u_int8_t op, u_int8_t rd, u_int8_t nn);
-		bool executeInstructionThumb(u_int16_t instruction);
+		void executeInstructionThumb(u_int16_t instruction);
 		void updateStatus(u_int32_t x, StatusBit carry, StatusBit overflow);
 		bool testCondition(u_int8_t condition);
 

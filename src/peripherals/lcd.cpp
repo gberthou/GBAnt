@@ -4,14 +4,15 @@
 
 #include "lcd.h"
 
-#define HBLANK_STEP_CYCLE_COUNT 4
+#define HBLANK_CYCLE_COUNT 1006
 //#define VBLANK_STEP_CYCLE_COUNT (HBLANK_STEP_CYCLE_COUNT * 308)
 //#define VBLANK_STEP_CYCLE_COUNT 100
 #define VBLANK_STEP_CYCLE_COUNT 4
 
 Lcd::Lcd(u_int32_t bAddress, u_int32_t eAddress):
 	Memory(bAddress, eAddress),
-	cmpt(0)
+	cmpt(0),
+	hcmpt(0)
 {
 	memset(&lcd, 0, sizeof(lcd));
 }
@@ -79,11 +80,30 @@ void Lcd::OnClock(void)
 	lcd.vcount = (lcd.vcount + cmpt / VBLANK_STEP_CYCLE_COUNT) & 0xFF;
 	cmpt %= VBLANK_STEP_CYCLE_COUNT;
 
-	std::cout << "VCOUNT = " << lcd.vcount << std::endl;
+	hcmpt = (hcmpt +1) % HBLANK_CYCLE_COUNT;
 }
 
 void Lcd::Render(void)
 {
+}
+
+bool Lcd::MustTriggerInterrupt(GBA_InterruptSource source)
+{
+	bool vblank = ((lcd.dispstat & (1 << 3)) && lcd.vcount >= 160 && lcd.vcount <= 226);
+	bool hblank = ((lcd.dispstat & (1 << 4)) && hcmpt == 0);
+	bool vcounter = ((lcd.dispstat & (1 << 5)) && lcd.vcount == (lcd.dispstat >> 8));
+
+	// Update flags
+	lcd.dispstat &= 0xFFF8;
+	lcd.dispstat |= vblank | (hblank << 1) | (vcounter << 2);
+
+	if(source == GBA_IS_LCD_VBLANK)
+		return vblank;
+	else if(source == GBA_IS_LCD_HBLANK)
+		return hblank;
+	else if(source == GBA_IS_LCD_VCOUNTER_MATCH)
+		return vcounter;
+	return false;
 }
 
 void Lcd::printStatus(void)
