@@ -79,7 +79,7 @@ bool DecodeInstruction(u_int32_t code, Instruction &instruction)
 				instruction.data.dp3.s = (code >> 20) & 1;
 				instruction.data.dp3.rn = (code >> 16) & 0xF;
 				instruction.data.dp3.rd = (code >> 12) & 0xF;
-				instruction.data.dp3.shift = (code >> 8) & 0xF;
+				instruction.data.dp3.shift = 2 * ((code >> 8) & 0xF);
 				instruction.data.dp3.immediate = code & 0xFF;
 			}
 			return true;
@@ -218,7 +218,7 @@ void PrintInstruction(const Instruction &instruction)
 			}
 
 			std::cout << "#" << (unsigned int)dp3->immediate;
-			std::cout << " ROR " << (int)(2 * dp3->shift);	
+			std::cout << " ROR " << (int)(dp3->shift);	
 			return;
 		}
 
