@@ -32,13 +32,15 @@ GBAcpu::GBAcpu():
 	mem.AddMemory(new PhysicalMemory(0x04000200, 0x040003FE)); // Interrupt, waitsait
 
 	/* ### Initialize BIOS memory */
-	mem.Write(0x00000018, 0xeafffffe);
+	//mem.Write(0x00000018, 0xe28ffe11);
+	mem.Write(0x00000018, 0xea000042);
 	mem.Write(0x00000128, 0xe92d500f);
-	mem.Write(0x0000012C, 0xe3a00301);
+	mem.Write(0x0000012C, 0xe59f000c);
 	mem.Write(0x00000130, 0xe08ee00f);
 	mem.Write(0x00000134, 0xe510f004);
 	mem.Write(0x00000138, 0xe8bd500f);
 	mem.Write(0x0000013C, 0xe25ef004);
+	mem.Write(0x00000140, 0x03008000);
 }
 
 GBAcpu::~GBAcpu()
@@ -81,9 +83,9 @@ bool GBAcpu::LoadGBA(const char *filename)
 void GBAcpu::Run(void)
 {
 	regSet.SetMode(RS_USER);
-	regSet.SetValue(PC, GBA_BASE_ADDRESS);
-	regSet.SetValue(SP, 0); // TODO: change value
-	regSet.SetValue(CPSR, 0); // TODO: change value
+	regSet.SetValue(PC, GBA_BASE_ADDRESS, 0);
+	regSet.SetValue(SP, 0, 0); // TODO: change value
+	regSet.SetValue(CPSR, 0, 0); // TODO: change value
 	ARMcpu::Run();
 }
 
@@ -110,6 +112,9 @@ void GBAcpu::runStep(void)
 		if(lcd->MustTriggerInterrupt(GBA_IS_LCD_VBLANK))
 		{
 			std::cout << "VBLANK IRQ HAPPENS NOW!" << std::endl;
+			regSet.SetMode(RS_IRQ);
+			thumbMode = false;
+			regSet.SetValue(PC, 0x18, 0);
 		}
 		if(lcd->MustTriggerInterrupt(GBA_IS_LCD_HBLANK))
 		{

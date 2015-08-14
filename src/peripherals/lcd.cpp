@@ -89,12 +89,12 @@ void Lcd::Render(void)
 
 bool Lcd::MustTriggerInterrupt(GBA_InterruptSource source)
 {
-	bool vblank = ((lcd.dispstat & (1 << 3)) && lcd.vcount >= 160 && lcd.vcount <= 226);
-	bool hblank = ((lcd.dispstat & (1 << 4)) && hcmpt == 0);
-	bool vcounter = ((lcd.dispstat & (1 << 5)) && lcd.vcount == (lcd.dispstat >> 8));
+	bool vblank = ((lcd.dispstat & 1) == 0 && (lcd.dispstat & (1 << 3)) && lcd.vcount >= 160 && lcd.vcount <= 226);
+	bool hblank = ((lcd.dispstat & 2) == 0 && (lcd.dispstat & (1 << 4)) && hcmpt == 0);
+	bool vcounter = ((lcd.dispstat & 4) == 0 && (lcd.dispstat & (1 << 5)) && lcd.vcount == (lcd.dispstat >> 8));
 
 	// Update flags
-	lcd.dispstat &= 0xFFF8;
+	//lcd.dispstat &= 0xFFF8;
 	lcd.dispstat |= vblank | (hblank << 1) | (vcounter << 2);
 
 	if(source == GBA_IS_LCD_VBLANK)

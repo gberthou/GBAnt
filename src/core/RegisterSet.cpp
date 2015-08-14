@@ -9,9 +9,11 @@ RegisterSet::~RegisterSet()
 {
 }
 
-void RegisterSet::SetValue(unsigned int regId, u_int32_t value)
+void RegisterSet::SetValue(unsigned int regId, u_int32_t value, DataWrapper *pcvalue)
 {
 	registers[regId] = value;
+	if(regId == PC && pcvalue)
+		pcvalue->Set(value);
 }
 
 u_int32_t RegisterSet::GetValue(unsigned int regId) const
@@ -31,8 +33,17 @@ u_int32_t &RegisterSet::getReg(unsigned int regId)
 
 		//RS_USER,
 		case RS_FIQ:
-			if((regId >= R8 && regId <= LR) || regId == SPSR)
+			if(regId >= R8 && regId <= LR)
 				return registers[regId + R8_FIQ];
+			if(regId == SPSR)
+				return registers[SPSR_FIQ];
+			break;
+		
+		case RS_IRQ:
+			if(regId == SP || regId == LR)
+				return registers[regId + SP_IRQ];
+			if(regId == SPSR)
+				return registers[SPSR_IRQ];
 			break;
 
 		default:

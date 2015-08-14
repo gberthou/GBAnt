@@ -3,6 +3,8 @@
 
 #include <sys/types.h>
 
+#include "DataWrapper.h"
+
 enum ARMRegSet
 {
 	RS_USER,
@@ -75,7 +77,7 @@ class RegisterSet
 		RegisterSet();
 		virtual ~RegisterSet();
 
-		void SetValue(unsigned int regId, u_int32_t value);
+		void SetValue(unsigned int regId, u_int32_t value, DataWrapper *pcvalue);
 		u_int32_t GetValue(unsigned int regId) const;
 		
 		void SetMode(ARMRegSet mode);

@@ -74,6 +74,8 @@ void ARMcpu::Run(void)
 	bool lock = false;
 	for(;;)
 	{
+		if(regSet.GetValue(PC) == 0x18) // BIOS interrupt routine
+			lock = true;
 		runStep();
 
 		if(lock)
@@ -133,6 +135,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 	if(DecodeInstruction(instruction, inst))
 	{
 		u_int32_t pcValue = regSet.GetValue(PC);
+		DataWrapper wrapper(&pcValue);
 
 		PrintInstruction(inst);
 		std::cout << std::endl;
@@ -166,9 +169,8 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 							scarry = carryShiftLeft(rmv, dp1->shift);
 							break;
 					}
-					alu(dp1->op, dp1->s, dp1->rd, dp1->rn, op2, scarry);
+					alu(dp1->op, dp1->s, dp1->rd, dp1->rn, op2, scarry, wrapper);
 				}
-				pcValue += 4;
 				break;
 			case IT_DATA_PROC2:
 				if(testCondition(inst.data.dp2.cond))
@@ -198,9 +200,8 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 							scarry = carryShiftLeft(rmv, rsv);
 							break;
 					}
-					alu(dp2->op, dp2->s, dp2->rd, dp2->rn, op2, scarry);
+					alu(dp2->op, dp2->s, dp2->rd, dp2->rn, op2, scarry, wrapper);
 				}
-				pcValue += 4;
 				break;
 
 			case IT_DATA_PROC3:
@@ -209,9 +210,8 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 					InstDataProc3 *dp3 = &inst.data.dp3;
 					u_int32_t op2 = ror(dp3->immediate, dp3->shift);
 					StatusBit scarry = carryShiftRight(dp3->immediate, dp3->shift);
-					alu(dp3->op, dp3->s, dp3->rd, dp3->rn, op2, scarry);
+					alu(dp3->op, dp3->s, dp3->rd, dp3->rn, op2, scarry, wrapper);
 				}
-				pcValue += 4;
 				break;
 
 			case IT_PSR_REG:
@@ -240,30 +240,25 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 						// TODO
 					}
 				}
-				pcValue += 4;
 				break;
 			
 			case IT_BRANCH:
-				if(!testCondition(inst.data.b.cond))
-					pcValue += 4;
-				else
+				if(testCondition(inst.data.b.cond))
 				{
 					if(inst.data.b.l) // link
-						regSet.SetValue(LR, pcValue + 4);
-					pcValue += 8 + inst.data.b.offset;
+						regSet.SetValue(LR, pcValue + 4, 0);
+					wrapper.Set(pcValue + inst.data.b.offset);
 				}
 				break;
 
 			case IT_BRANCH_EX:
-				if(!testCondition(inst.data.bx.cond))
-					pcValue += 4;
-				else
+				if(testCondition(inst.data.bx.cond))
 				{
 					u_int32_t rnv = regSet.GetValue(inst.data.bx.rn);
 					if(inst.data.bx.l) // link
-						regSet.SetValue(LR, pcValue + 4);
+						regSet.SetValue(LR, pcValue + 4, 0);
 
-					pcValue = rnv & 0xFFFFFFFE;
+					wrapper.Set(rnv & 0xFFFFFFFE);
 					thumbMode = ((rnv & 1) == 1);
 					
 					if(thumbMode)
@@ -305,7 +300,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 						std::cout << "Loading value ";
 						PrintHex(value);
 						std::cout << std::endl;
-						regSet.SetValue(inst.data.ti9.rd, value);
+						regSet.SetValue(inst.data.ti9.rd, value, &wrapper);
 					}
 					else // STR
 					{
@@ -328,10 +323,8 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 					}
 				
 					if(!inst.data.ti9.p || inst.data.ti9.w) // Write-back
-						regSet.SetValue(inst.data.ti9.rn, address);
+						regSet.SetValue(inst.data.ti9.rn, address, &wrapper);
 				}
-
-				pcValue += 4;
 				break;
 
 			case IT_BLOCK_TRANS:
@@ -355,7 +348,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 									rnv += delta;
 
 								mem.Read(rnv, value);
-								regSet.SetValue(i, value);
+								regSet.SetValue(i, value, &wrapper);
 
 								if(!bt->p)
 									rnv += delta;
@@ -380,19 +373,20 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 					}
 
 					if(bt->w) // Write-back
-						regSet.SetValue(bt->rn, rnv);
+						regSet.SetValue(bt->rn, rnv, &wrapper);
 				}
-				pcValue += 4;
 				break;
 			}
 
 			default:
 				std::cerr << "Instruction not supported yet" << std::endl;
-				pcValue += 4;
 				break;
 		}
 
-		regSet.SetValue(PC, pcValue);
+		if(!wrapper.IsWritten())
+			pcValue += 4;
+
+		regSet.SetValue(PC, pcValue, 0);
 	}
 	else
 	{
@@ -401,7 +395,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 	}
 }
 
-void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op2, StatusBit shiftCarry)
+void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op2, StatusBit shiftCarry, DataWrapper &pcValue)
 {
 	u_int32_t result;
 
@@ -533,7 +527,7 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 	
 	if(op <= 0x7 || (op >= 0xC && op <= 0xF))
 	{
-		regSet.SetValue(rd, result);
+		regSet.SetValue(rd, result, &pcValue);
 		if(s)
 			updateStatus(result, carry, overflow);
 	}
@@ -541,7 +535,7 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		updateStatus(result, carry, overflow);
 }
 
-void ARMcpu::aluThumbRegister(u_int8_t op, u_int8_t rd, u_int8_t rs)
+void ARMcpu::aluThumbRegister(u_int8_t op, u_int8_t rd, u_int8_t rs, DataWrapper &pcValue)
 {
 	u_int32_t rdv = regSet.GetValue(rd);
 	u_int32_t rsv = regSet.GetValue(rs);
@@ -618,12 +612,12 @@ void ARMcpu::aluThumbRegister(u_int8_t op, u_int8_t rd, u_int8_t rs)
 			break;
 	}
 	if(op != 0x8 && op != 0xA && op != 0xB)
-		regSet.SetValue(rd, result);
+		regSet.SetValue(rd, result, &pcValue);
 
 	updateStatus(result, carry, overflow);
 }
 
-void ARMcpu::aluThumbImm(u_int8_t op, u_int8_t rd, u_int8_t nn)
+void ARMcpu::aluThumbImm(u_int8_t op, u_int8_t rd, u_int8_t nn, DataWrapper &pcValue)
 {
 	u_int32_t result;
 	StatusBit carry = SB_UNCHANGED;
@@ -654,7 +648,7 @@ void ARMcpu::aluThumbImm(u_int8_t op, u_int8_t rd, u_int8_t nn)
 	}
 
 	if(op != 1) // Not CMP
-		regSet.SetValue(rd, result);
+		regSet.SetValue(rd, result, &pcValue);
 	
 	updateStatus(result, carry, overflow);
 }
@@ -679,7 +673,7 @@ void ARMcpu::updateStatus(u_int32_t x, StatusBit carry, StatusBit overflow)
 		cpsr |= (overflow << 28);
 	}
 
-	regSet.SetValue(CPSR, cpsr);
+	regSet.SetValue(CPSR, cpsr, 0);
 }
 
 bool ARMcpu::testCondition(u_int8_t condition)
@@ -736,6 +730,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 	if(DecodeInstructionThumb(instruction, inst))
 	{
 		u_int32_t pcValue = regSet.GetValue(PC);
+		DataWrapper wrapper(&pcValue);
 
 		PrintInstructionThumb(pcValue, inst);
 		std::cout << std::endl;
@@ -762,10 +757,9 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						carry = carryShiftLeft(rsv, inst.data.shi.offset);	
 						break;
 				}
-				regSet.SetValue(inst.data.shi.rd, result);
+				regSet.SetValue(inst.data.shi.rd, result, &wrapper);
 
 				updateStatus(result, carry, SB_UNCHANGED);
-				pcValue += 2;
 				break;
 			}
 
@@ -787,19 +781,16 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 					else
 						rsv += rnv;
 				}
-				regSet.SetValue(inst.data.as.rd, rsv);
-				pcValue += 2;
+				regSet.SetValue(inst.data.as.rd, rsv, &wrapper);
 				break;
 			}
 
 			case IT_T_IMM:
-				aluThumbImm(inst.data.im.op, inst.data.im.rd, inst.data.im.nn);
-				pcValue += 2;
+				aluThumbImm(inst.data.im.op, inst.data.im.rd, inst.data.im.nn, wrapper);
 				break;
 
 			case IT_T_ALU:
-				aluThumbRegister(inst.data.al.op, inst.data.al.rd, inst.data.al.rs);
-				pcValue += 2;
+				aluThumbRegister(inst.data.al.op, inst.data.al.rd, inst.data.al.rs, wrapper);
 				break;
 
 			case IT_T_HIREG:
@@ -810,7 +801,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 					case 0: // ADD
 					{
 						u_int32_t rdv = regSet.GetValue(inst.data.hr.rd);
-						regSet.SetValue(inst.data.hr.rd, rdv + rsv);
+						regSet.SetValue(inst.data.hr.rd, rdv + rsv, &wrapper);
 						break;
 					}
 
@@ -824,27 +815,23 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 
 					case 2: // MOV
 					{
-						regSet.SetValue(inst.data.hr.rd, rsv);
+						regSet.SetValue(inst.data.hr.rd, rsv, &wrapper);
 						break;
 					}
 
 					case 3:
 					{
-						pcValue = rsv & 0xFFFFFFFE;
+						wrapper.Set(rsv & 0xFFFFFFFE);
 						if(!(rsv & 1)) // Switch to ARM mode
 							thumbMode = false;
 						if(inst.data.hr.rs == PC)
-							pcValue += 4;
+							wrapper.Set(pcValue + 4);
 						break;	
 					}
 
 					default: // Should not happen
 						break;
 				}
-
-				if(inst.data.hr.op != 3)
-					pcValue += 2;
-
 				break;
 			}
 
@@ -856,8 +843,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 				std::cout << "Loading value ";
 				PrintHex(value);
 				std::cout << std::endl;
-				pcValue += 2;
-				regSet.SetValue(inst.data.lp.rd, value);
+				regSet.SetValue(inst.data.lp.rd, value, &wrapper);
 				break;
 			}
 
@@ -873,13 +859,13 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 					{
 						u_int32_t value;
 						mem.Read(address, value, MA8);
-						regSet.SetValue(mi->rd, value);
+						regSet.SetValue(mi->rd, value, &wrapper);
 					}
 					else // Word mode
 					{
 						u_int32_t value;
 						mem.Read(address, value);
-						regSet.SetValue(mi->rd, value);
+						regSet.SetValue(mi->rd, value, &wrapper);
 					}
 				}
 				else // STR
@@ -894,7 +880,6 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						mem.Write(address, value);
 					}
 				}
-				pcValue += 2;
 				break;
 			}
 
@@ -907,15 +892,13 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 				{
 					u_int32_t value;
 					mem.Read(address, value, MA16);
-					regSet.SetValue(mh->rd, value);
+					regSet.SetValue(mh->rd, value, &wrapper);
 				}
 				else // STRH
 				{
 					u_int32_t rdv = regSet.GetValue(mh->rd);
 					mem.Write(address, rdv, MA16);
 				}
-
-				pcValue += 2;
 				break;
 			}
 
@@ -928,15 +911,13 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 				{
 					u_int32_t value;
 					mem.Read(address, value);
-					regSet.SetValue(ms->rd, value);
+					regSet.SetValue(ms->rd, value, &wrapper);
 				}
 				else // STR
 				{
 					u_int32_t rdv = regSet.GetValue(ms->rd);
 					mem.Write(address, rdv);
 				}
-
-				pcValue += 2;
 				break;
 			}
 			
@@ -947,8 +928,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 					value += regSet.GetValue(SP);
 				else // PC
 					value += (regSet.GetValue(PC) + 4) & ~2;
-				regSet.SetValue(inst.data.r.rd, value);
-				pcValue += 2;
+				regSet.SetValue(inst.data.r.rd, value, &wrapper);
 				break;
 			}
 			
@@ -956,8 +936,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 			{
 				u_int32_t spv = regSet.GetValue(SP);
 				spv += 4 * inst.data.asp.offset;
-				regSet.SetValue(SP, spv);
-				pcValue += 2;
+				regSet.SetValue(SP, spv, 0);
 				break;
 			}
 
@@ -979,7 +958,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 							PrintHex(spv);
 							std::cout << std::endl;
 							mem.Read(spv, value);
-							regSet.SetValue(i, value);
+							regSet.SetValue(i, value, 0);
 							spv += 4;
 						}
 					}
@@ -989,7 +968,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						std::cout << "POP PC = ";
 						PrintHex(value);
 						std::cout << std::endl;
-						pcValue = value & 0xFFFFFFFE;
+						wrapper.Set(value & 0xFFFFFFFE);
 						spv += 4;
 				
 						/* Do not update thumb mode?	
@@ -1034,9 +1013,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						}
 					}
 				}
-				regSet.SetValue(SP, spv);
-				if(!pp->op || !pp->pclr)
-					pcValue += 2;
+				regSet.SetValue(SP, spv, 0);
 				break;
 			}
 
@@ -1054,7 +1031,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						{
 							u_int32_t value;
 							mem.Read(rbv, value);
-							regSet.SetValue(i, value);
+							regSet.SetValue(i, value, 0);
 							rbv += 4;
 						}
 				}
@@ -1069,21 +1046,17 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 						}
 				}
 				
-				regSet.SetValue(inst.data.m.rb, rbv);
-				pcValue += 2;
+				regSet.SetValue(inst.data.m.rb, rbv, &wrapper);
 				break;
 			}
 
 			case IT_T_BRANCH_COND:
 				if(testCondition(inst.data.bc.cond))
-					pcValue += inst.data.bc.offset;
-				else
-					pcValue += 2;
+					wrapper.Set(pcValue + inst.data.bc.offset);
 				break;
 
 			case IT_T_SVC:
 			{
-				pcValue += 2;
 				break;
 				regSet.SetMode(RS_SUPERVISOR);
 				std::cout << "Entering supervisor mode" << std::endl;
@@ -1105,37 +1078,38 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 			}
 
 			case IT_T_BRANCH:
-				pcValue += inst.data.b.offset;
+				wrapper.Set(pcValue + inst.data.b.offset);
 				break;
 	
 			case IT_T_BRANCH_LINK:
 				if(inst.data.bl.lr)
 				{
-					regSet.SetValue(LR, (pcValue + 4 + (inst.data.bl.nn << 12)) | 1);
-					pcValue += 2;
+					regSet.SetValue(LR, (pcValue + 4 + (inst.data.bl.nn << 12)) | 1, 0);
 				}
 				else
 				{
 					u_int32_t lrv = regSet.GetValue(LR);
 					if(inst.data.bl.x) // BLX
 					{
-						regSet.SetValue(LR, pcValue + 2);
+						regSet.SetValue(LR, pcValue + 2, 0);
 						thumbMode = false;
 					}
 					else
-						regSet.SetValue(LR, (pcValue + 2) | 1);
-					pcValue += Unsigned2Signed(lrv + (inst.data.bl.nn << 1) - pcValue, 22);
-					pcValue &= 0xFFFFFFFE;
+						regSet.SetValue(LR, (pcValue + 2) | 1, 0);
+					wrapper.Set(pcValue + Unsigned2Signed(lrv + (inst.data.bl.nn << 1) - pcValue, 22));
+					wrapper.Set(pcValue & 0xFFFFFFFE);
 				}
 				break;
 
 			default:
 				std::cerr << "Instruction not supported yet" << std::endl;
-				pcValue += 2;
 				break;
 		}
-		
-		regSet.SetValue(PC, pcValue);
+
+		if(!wrapper.IsWritten())
+			pcValue += 2;
+
+		regSet.SetValue(PC, pcValue, 0);
 	}
 	else
 		std::cerr << "Unknown thumb instruction" << std::endl;

@@ -122,7 +122,7 @@ bool DecodeInstruction(u_int32_t code, Instruction &instruction)
 			instruction.type = IT_BRANCH;
 			instruction.data.b.cond = code >> 28;
 			instruction.data.b.l = (code >> 24) & 1;
-			instruction.data.b.offset = 4 * Unsigned2Signed(offset, 23);
+			instruction.data.b.offset = 8 + 4 * Unsigned2Signed(offset, 23);
 			return true;
 		}
 
@@ -256,7 +256,7 @@ void PrintInstruction(const Instruction &instruction)
 			std::cout << "b";
 			if(instruction.data.b.l)
 				std::cout << "l";
-			std::cout << " #" << (8 + instruction.data.b.offset);
+			std::cout << " #" << instruction.data.b.offset;
 			return;
 
 		case IT_TRANS_IMM9:
