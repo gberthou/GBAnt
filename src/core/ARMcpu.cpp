@@ -218,7 +218,8 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 				if(testCondition(inst.data.psrr.cond))
 				{
 					InstPSRReg *psrr = &inst.data.psrr;
-					u_int32_t value = regSet.GetValue(psrr->p ? SPSR : CPSR);
+					ARMRegister reg = psrr->p ? SPSR : CPSR;
+					u_int32_t value = regSet.GetValue(reg);
 
 					if(psrr->l) // MSR
 					{
@@ -234,10 +235,11 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 								value |= (rdv & mask);
 							}
 						}
+						regSet.SetValue(reg, value, 0);
 					}
 					else // MRS
 					{
-						// TODO
+						regSet.SetValue(psrr->rd, value, 0);
 					}
 				}
 				break;
