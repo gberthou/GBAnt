@@ -33,6 +33,7 @@ class ARMcpu
 		void executeInstructionThumb(u_int16_t instruction);
 		void updateStatus(u_int32_t x, StatusBit carry, StatusBit overflow);
 		bool testCondition(u_int8_t condition);
+		u_int32_t loadstore(unsigned int reg, u_int16_t registers, bool pclr, bool r16, bool load, bool increment, bool after, DataWrapper &pcwrapper);
 
 		bool thumbMode;
 		RegisterSet regSet;

@@ -1,8 +1,11 @@
+#include <cstring>
+
 #include "RegisterSet.h"
 
 RegisterSet::RegisterSet():
 	mode(RS_USER)
 {
+	memset(registers, 0, sizeof(registers));
 }
 
 RegisterSet::~RegisterSet()

@@ -5,6 +5,7 @@
 #include "sound.h"
 #include "timer.h"
 #include "lcd.h"
+#include "keys.h"
 
 #endif
 

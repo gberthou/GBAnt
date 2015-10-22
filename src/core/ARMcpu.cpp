@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 #include "ARMcpu.h"
 #include "Instruction.h"
@@ -43,6 +44,7 @@ inline u_int32_t ror(u_int32_t x, u_int32_t n)
 	return (x << (32 - n)) | (x >> n);
 }
 
+/*
 static void printRegisters(const RegisterSet &regSet, u_int8_t rlist)
 {
 	for(unsigned i = 0; i < 8; ++i)
@@ -56,6 +58,7 @@ static void printRegisters(const RegisterSet &regSet, u_int8_t rlist)
 		}
 	}
 }
+*/
 
 ARMcpu::ARMcpu(u_int32_t bAddress):
 	thumbMode(false),
@@ -74,8 +77,12 @@ void ARMcpu::Run(void)
 	bool lock = false;
 	for(;;)
 	{
-		if(regSet.GetValue(PC) == 0x18) // BIOS interrupt routine
+		/*
+		u_int32_t pcvalue = regSet.GetValue(PC);
+		if(pcvalue == 0x18 // BIOS interrupt routine
+		|| pcvalue == 0x08043980)
 			lock = true;
+		*/
 		runStep();
 
 		if(lock)
@@ -150,6 +157,9 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 					u_int32_t op2;
 					StatusBit scarry;
 
+					if(dp1->rm == PC)
+						rmv += 8;
+
 					switch(dp1->typ)
 					{
 						case 1:
@@ -180,6 +190,12 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 					u_int32_t rsv = regSet.GetValue(dp2->rs) & 0xFF;
 					u_int32_t op2;
 					StatusBit scarry;
+					
+					if(dp2->rm == PC)
+						rmv += 8;
+					
+					if(dp2->rs == PC)
+						rsv += 12;
 
 					switch(dp2->typ)
 					{
@@ -256,7 +272,12 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 			case IT_BRANCH_EX:
 				if(testCondition(inst.data.bx.cond))
 				{
+					std::cout << "REGISTER: ";
+					PrintRegister(inst.data.bx.rn);
+					std::cout << " (";
 					u_int32_t rnv = regSet.GetValue(inst.data.bx.rn);
+					PrintHex(rnv);
+					std::cout << ");" << std::endl;
 					if(inst.data.bx.l) // link
 						regSet.SetValue(LR, pcValue + 4, 0);
 
@@ -331,49 +352,10 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 
 			case IT_BLOCK_TRANS:
 			{
-				InstBlockTrans *bt = &inst.data.bt;
+				const InstBlockTrans *bt = &inst.data.bt;
 				if(testCondition(bt->cond))
 				{
-					unsigned int delta = bt->u ? 4 : -4;
-					unsigned int rnv = regSet.GetValue(bt->rn);
-					u_int32_t value;
-
-					// TODO: PSR bit
-					
-					if(bt->l) // LDM
-					{
-						for(unsigned int i = 0; i < 16; ++i)
-						{
-							if((bt->rlist >> i) & 1)
-							{
-								if(bt->p)
-									rnv += delta;
-
-								mem.Read(rnv, value);
-								regSet.SetValue(i, value, &wrapper);
-
-								if(!bt->p)
-									rnv += delta;
-							}
-						}
-					}
-					else // STM
-					{
-						for(unsigned int i = 0; i < 16; ++i)
-						{
-							if((bt->rlist >> i) & 1)
-							{
-								if(bt->p)
-									rnv += delta;
-
-								mem.Write(rnv, regSet.GetValue(i));
-
-								if(!bt->p)
-									rnv += delta;
-							}
-						}
-					}
-
+					u_int32_t rnv = ARMcpu::loadstore(bt->rn, bt->rlist, false, true, bt->l > 0, bt->u > 0, bt->p == 0, wrapper);
 					if(bt->w) // Write-back
 						regSet.SetValue(bt->rn, rnv, &wrapper);
 				}
@@ -399,30 +381,38 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 
 void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op2, StatusBit shiftCarry, DataWrapper &pcValue)
 {
+	u_int32_t rnv;
 	u_int32_t result;
 
 	StatusBit carry = SB_UNCHANGED;
 	StatusBit overflow = SB_UNCHANGED;
 
+	if(op != 0xD && op != 0xF)
+	{
+		rnv = regSet.GetValue(rn);
+		if(rn == PC)
+		{
+			std::cout << "PC DETECTED"<<std::endl;
+			rnv += 8;
+		}
+	}
+
 	switch(op)
 	{
 		case 0x0: // AND
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv & op2;
 			carry = shiftCarry;
 			break;
 		}
 		case 0x1: // EOR
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv ^ op2;
 			carry = shiftCarry;
 			break;
 		}
 		case 0x2: // SUB
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv - op2;
 			if(s)
 				carry = result > rnv ? SB_1 : SB_0;
@@ -430,7 +420,6 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		}
 		case 0x3: // RSB
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = op2 - rnv;
 			if(s)
 				carry = result > rnv ? SB_1 : SB_0;
@@ -438,7 +427,6 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		}
 		case 0x4: // ADD
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv + op2;
 			if(s)
 				carry = result < rnv ? SB_1 : SB_0;
@@ -446,7 +434,6 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		}
 		case 0x5: // ADC
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			u_int32_t cpsr = regSet.GetValue(CPSR);
 			result = rnv + op2 + ((cpsr >> 29) & 1);
 			if(s)
@@ -455,7 +442,6 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		}
 		case 0x6: // SBC
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			u_int32_t cpsr = regSet.GetValue(CPSR);
 			result = rnv - op2 - 1 + ((cpsr >> 29) & 1);
 			if(s)
@@ -464,7 +450,6 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		}
 		case 0x7: // RSC
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			u_int32_t cpsr = regSet.GetValue(CPSR);
 			result = op2 - rnv - 1 + ((cpsr >> 29) & 1);
 			if(s)
@@ -473,21 +458,18 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		}
 		case 0x8: // TST
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv & op2;
 			carry = shiftCarry;
 			break;
 		}
 		case 0x9: // TEQ
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv ^ op2;
 			carry = shiftCarry;
 			break;
 		}
 		case 0xA: // CMP
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv - op2;
 			if(s)
 				carry = result > rnv ? SB_1 : SB_0;
@@ -495,7 +477,6 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		}
 		case 0xB: // CMN
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv + op2;
 			if(s)
 				carry = result < rnv ? SB_1 : SB_0;
@@ -503,7 +484,6 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 		}
 		case 0xC: // ORR
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv | op2;
 			carry = shiftCarry;
 			break;
@@ -514,7 +494,6 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 			break;
 		case 0xE: // BIC
 		{
-			u_int32_t rnv = regSet.GetValue(rn);
 			result = rnv & (~op2);
 			carry = shiftCarry;
 			break;
@@ -544,7 +523,7 @@ void ARMcpu::aluThumbRegister(u_int8_t op, u_int8_t rd, u_int8_t rs, DataWrapper
 	u_int32_t result;
 	StatusBit carry = SB_UNCHANGED;
 	StatusBit overflow = SB_UNCHANGED;
-	
+
 	switch(op)
 	{
 		case 0x0: // AND
@@ -944,110 +923,17 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 
 			case IT_T_PUSHPOP:
 			{
-				InstTPushPop *pp = &inst.data.pp;
+				const InstTPushPop *pp = &inst.data.pp;
 				u_int32_t spv = regSet.GetValue(SP);
-				u_int32_t value;
-
-				if(pp->op) // POP
-				{
-					printRegisters(regSet, pp->rlist);
-					for(unsigned i = 8; i;)
-					{
-						--i;
-						if((pp->rlist >> i) & 1) // Register must be popped
-						{
-							std::cout << "Popping value @";
-							PrintHex(spv);
-							std::cout << std::endl;
-							mem.Read(spv, value);
-							regSet.SetValue(i, value, 0);
-							spv += 4;
-						}
-					}
-					if(pp->pclr) // PC must me popped
-					{
-						mem.Read(spv, value);
-						std::cout << "POP PC = ";
-						PrintHex(value);
-						std::cout << std::endl;
-						wrapper.Set(value & 0xFFFFFFFE);
-						spv += 4;
-				
-						/* Do not update thumb mode?	
-						if(!(value & 1))
-							thumbMode = false;
-						*/
-					}
-					for(unsigned int i = 0; i < 16; ++i)
-						std::cout << '-';
-					std::cout << std::endl;
-					printRegisters(regSet, pp->rlist);
-				}
-				else // PUSH
-				{
-					printRegisters(regSet, pp->rlist);
-					if(pp->pclr)
-					{
-						std::cout << "lr: ";
-						PrintHex(regSet.GetValue(LR));
-						std::cout << std::endl;
-					}
-					
-					if(pp->pclr) // LR must me pushed
-					{
-						spv -= 4;
-						std::cout << "PUSH @";
-					   	PrintHex(spv);
-						std::cout << " LR = ";
-						PrintHex(regSet.GetValue(LR));
-						std::cout << std::endl;
-						mem.Write(spv, regSet.GetValue(LR));
-					}
-					for(unsigned i = 0; i < 8; ++i)
-					{
-						if((pp->rlist >> i) & 1) // Register must be pushed
-						{
-							spv -= 4;
-							std::cout << "Pushing value @";
-							PrintHex(spv);
-							std::cout << std::endl;
-							mem.Write(spv, regSet.GetValue(i));
-						}
-					}
-				}
+	
+				spv = loadstore(SP, pp->rlist, pp->pclr > 0, false, pp->op > 0, pp->op > 0, pp->op > 0, wrapper);
 				regSet.SetValue(SP, spv, 0);
 				break;
 			}
 
 			case IT_T_MULTIPLE:
 			{
-				u_int32_t rbv = regSet.GetValue(inst.data.m.rb);
-				PrintRegister(inst.data.m.rb);
-				std::cout << ": ";
-				PrintHex(rbv);
-				std::cout << std::endl;
-				if(inst.data.m.op) // LDM
-				{
-					for(unsigned int i = 0; i < 8; ++i)
-						if((inst.data.m.rlist >> i) & 1)
-						{
-							u_int32_t value;
-							mem.Read(rbv, value);
-							regSet.SetValue(i, value, 0);
-							rbv += 4;
-						}
-				}
-				else // STM
-				{
-					for(unsigned int i = 0; i < 8; ++i)
-						if((inst.data.m.rlist >> i) & 1)
-						{
-							u_int32_t value = regSet.GetValue(i);
-							mem.Write(rbv, value);
-							rbv += 4;
-						}
-				}
-				
+				u_int32_t rbv = loadstore(inst.data.m.rb, inst.data.m.rlist, false, false, inst.data.m.op > 0, true, true, wrapper);
 				regSet.SetValue(inst.data.m.rb, rbv, &wrapper);
 				break;
 			}
@@ -1115,5 +1001,74 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 	}
 	else
 		std::cerr << "Unknown thumb instruction" << std::endl;
+}
+
+u_int32_t ARMcpu::loadstore(unsigned int reg, u_int16_t registers, bool pclr, bool r16, bool load, bool increment, bool after, DataWrapper &pcwrapper)
+{
+	unsigned int maxregistercount = (r16 ? 16 : 8);
+	const u_int32_t delta = 4;
+	u_int32_t value;
+	u_int32_t finalAddress;
+	u_int32_t lowestAddress = regSet.GetValue(reg);
+	std::vector<unsigned int> targetRegisters;
+
+	for(unsigned int i = 0; i < maxregistercount; ++i)
+		if((registers >> i) & 1)
+			targetRegisters.push_back(i);
+	if(pclr)
+		targetRegisters.push_back((unsigned int)(load ? PC : LR));
+
+	if(increment)
+	{
+		finalAddress = lowestAddress + targetRegisters.size() * 4;
+	}
+	else
+	{
+		lowestAddress -= targetRegisters.size() * 4;
+		finalAddress = lowestAddress;
+	}
+
+	std::cout << "PUSHPOP" << std::endl;
+
+	if(!after)
+	{
+		lowestAddress += delta;
+		finalAddress += 4;
+	}
+
+	for(std::vector<unsigned int>::const_iterator it = targetRegisters.begin();
+	    it != targetRegisters.end();
+		++it)
+	{
+		if(load)
+		{
+			mem.Read(lowestAddress, value);
+			regSet.SetValue(*it, value, &pcwrapper);
+
+			PrintRegister(*it);
+			std::cout << " <- ";
+			PrintHex(value);
+			std::cout << " (";
+			PrintHex(lowestAddress);
+			std::cout << ')';
+			std::cout << std::endl;
+		}
+		else
+		{
+			value = regSet.GetValue(*it);
+			mem.Write(lowestAddress, value);
+
+			PrintRegister(*it);
+			std::cout << " (";
+			PrintHex(value);
+			std::cout << ") -> @";
+			PrintHex(lowestAddress);
+			std::cout << std::endl;
+		}
+
+		lowestAddress += delta;
+	}
+
+	return finalAddress;
 }
 

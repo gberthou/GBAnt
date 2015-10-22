@@ -173,6 +173,19 @@ void PrintInstruction(const Instruction &instruction)
 
 	switch(instruction.type)
 	{
+		case IT_BRANCH_EX:
+		{
+			const InstBranchEx *bx = &instruction.data.bx;
+			std::cout << 'b';
+			if(bx->l)
+				std::cout << 'l';
+			std::cout << 'x';
+			PrintCondition(bx->cond);
+			std::cout << ' ';
+			PrintRegister(bx->rn);
+			return;
+		}
+		
 		case IT_DATA_PROC1:
 		{
 			const InstDataProc1 *dp1 = &instruction.data.dp1;
