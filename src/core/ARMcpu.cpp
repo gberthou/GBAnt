@@ -381,7 +381,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 
 void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op2, StatusBit shiftCarry, DataWrapper &pcValue)
 {
-	u_int32_t rnv;
+	u_int32_t rnv = 0;
 	u_int32_t result;
 
 	StatusBit carry = SB_UNCHANGED;
@@ -503,6 +503,7 @@ void ARMcpu::alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op
 			carry = shiftCarry;
 			break;
 		default:
+			result = 0;
 			break;
 	}
 	
@@ -590,6 +591,7 @@ void ARMcpu::aluThumbRegister(u_int8_t op, u_int8_t rd, u_int8_t rs, DataWrapper
 			result = ~rsv;
 			break;
 		default: // Should not happen
+			result = 0;
 			break;
 	}
 	if(op != 0x8 && op != 0xA && op != 0xB)
@@ -625,6 +627,8 @@ void ARMcpu::aluThumbImm(u_int8_t op, u_int8_t rd, u_int8_t nn, DataWrapper &pcV
 			break;
 
 		default:
+			result = 0;
+
 			break;
 	}
 
@@ -1024,8 +1028,8 @@ u_int32_t ARMcpu::loadstore(unsigned int reg, u_int16_t registers, bool pclr, bo
 	}
 	else
 	{
-		lowestAddress -= targetRegisters.size() * 4;
-		finalAddress = lowestAddress;
+		lowestAddress -= (targetRegisters.size()+1) * 4;
+		finalAddress = lowestAddress + 4;
 	}
 
 	std::cout << "PUSHPOP" << std::endl;
@@ -1033,7 +1037,7 @@ u_int32_t ARMcpu::loadstore(unsigned int reg, u_int16_t registers, bool pclr, bo
 	if(!after)
 	{
 		lowestAddress += delta;
-		finalAddress += 4;
+		//finalAddress += 4;
 	}
 
 	for(std::vector<unsigned int>::const_iterator it = targetRegisters.begin();
@@ -1068,6 +1072,9 @@ u_int32_t ARMcpu::loadstore(unsigned int reg, u_int16_t registers, bool pclr, bo
 
 		lowestAddress += delta;
 	}
+	std::cout << "Final address: ";
+	PrintHex(finalAddress);
+	std::cout << std::endl;
 
 	return finalAddress;
 }

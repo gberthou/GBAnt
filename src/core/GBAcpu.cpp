@@ -148,3 +148,112 @@ bool GBAcpu::interruptsEnabled(void)
 	return false;
 }
 
+bool GBAcpu::RunTestStack(void)
+{
+	const u_int32_t INIT_SP = 0x3000020;
+	
+	bool ret = true;
+	u_int32_t spv = INIT_SP;
+	u_int32_t pcv;
+	u_int32_t values[3];
+	DataWrapper wrapper(&pcv);
+
+	regSet.SetValue(SP, spv, 0);
+	regSet.SetValue(R0, 0x42, 0);
+	regSet.SetValue(R1, 0x28, 0);
+	regSet.SetValue(R2, 0x21, 0);
+	regSet.SetValue(R3, 0x12, 0);
+	regSet.SetValue(R4, 0x13, 0);
+	regSet.SetValue(R5, 0x14, 0);
+
+	for(unsigned int i = 12; i; --i)
+	{
+		mem.Write(spv - 12 + 4 * (12 - i), i);
+	}
+
+	std::cout << ">> stmia sp!, {r0, r1, r2}" << std::endl;
+	spv = loadstore(SP, 0x7, false, false, false, true, true, wrapper); // stmia sp!, {r0, r1, r2}
+	regSet.SetValue(SP, spv, 0);
+	if(spv != INIT_SP + 12)
+	{
+		std::cerr << "[ERROR] Bad sp" << std::endl;
+	}
+	else
+	{
+		for(unsigned int i = 0; i < 3; ++i)
+			mem.Read(spv - 4 * (i+1), values[2-i]);
+		if(values[0] != 0x42 || values[1] != 0x28 || values[2] != 0x21)
+			std::cerr << "[ERROR] Values at the wrong place" << std::endl;
+		else
+			std::cout << "[OK]" << std::endl;
+	}
+	std::cout << std::endl;
+
+	std::cout << ">> stmdb sp!, {r3, r4, r5}" << std::endl;
+	spv = loadstore(SP, 0x38, false, false, false, false, false, wrapper); // stmdb sp!, {r3, r4, r5}
+	regSet.SetValue(SP, spv, 0);
+	if(spv != INIT_SP)
+	{
+		std::cerr << "[ERROR] Bad sp" << std::endl;
+	}
+	else
+	{
+		for(unsigned int i = 0; i < 3; ++i)
+		{
+			mem.Read(spv + 4 * i, values[i]);
+			printf("%x\n", values[i]);
+		}
+		if(values[0] != 0x12 || values[1] != 0x13 || values[2] != 0x14)
+			std::cerr << "[ERROR] Values at the wrong place" << std::endl;
+		else
+			std::cout << "[OK]" << std::endl;
+	}
+	std::cout << std::endl;
+	
+	std::cout << ">> ldmdb sp!, {r0, r1, r2}" << std::endl;
+	spv = loadstore(SP, 0x7, false, false, true, false, false, wrapper); // ldmdb sp!, {r0, r1, r2}
+	regSet.SetValue(SP, spv, 0);
+	if(spv != INIT_SP - 12)
+	{
+		std::cerr << "[ERROR] Bad sp" << std::endl;
+	}
+	else
+	{
+		if(regSet.GetValue(R0) != 12 || regSet.GetValue(R1) != 11 || regSet.GetValue(R2) != 10)
+			std::cerr << "[ERROR] Bad register values" << std::endl;
+		else
+		{
+			for(unsigned int i = 0; i < 3; ++i)
+				mem.Read(spv + 4 * i, values[i]);
+			if(values[0] != 0xc || values[1] != 0xb || values[2] != 0xa)
+				std::cerr << "[ERROR] Bad stack values" << std::endl;
+			std::cout << "[Ok]" << std::endl;
+		}
+	}
+	std::cout << std::endl;
+	
+	std::cout << ">> ldmia sp!, {r3, r4, r5}" << std::endl;
+	spv = loadstore(SP, 0x38, false, false, true, true, true, wrapper); // ldmia sp!, {r0, r1, r2}
+	regSet.SetValue(SP, spv, 0);
+	if(spv != INIT_SP)
+	{
+		std::cerr << "[ERROR] Bad sp" << std::endl;
+	}
+	else
+	{
+		if(regSet.GetValue(R3) != 0xc || regSet.GetValue(R4) != 0xb || regSet.GetValue(R5) != 0xa)
+			std::cerr << "[ERROR] Bad values" << std::endl;
+		else
+		{
+			for(unsigned int i = 0; i < 3; ++i)
+				mem.Read(spv + 4 * i, values[i]);
+			if(values[0] != 0x12 || values[1] != 0x13 || values[2] != 0x14)
+				std::cerr << "[Error] Bad stack values" << std::endl;
+			else
+				std::cout << "[Ok]" << std::endl;
+		}
+	}
+	std::cout << std::endl;
+	return ret;
+}
+

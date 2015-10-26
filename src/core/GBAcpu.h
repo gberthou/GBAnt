@@ -16,6 +16,9 @@ class GBAcpu : public ARMcpu
 
 		void TriggerInterrupt(GBA_InterruptSource source);
 
+		// TESTS
+		bool RunTestStack(void);
+
 	protected:
 		virtual void runStep(void);
 		virtual void onClock(void);

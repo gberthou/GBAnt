@@ -20,7 +20,7 @@ class ARMcpu
 		virtual ~ARMcpu();
 
 		virtual void Run(void);
-	
+
 	protected:
 		virtual void runStep(void);
 		virtual void onClock(void);
