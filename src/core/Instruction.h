@@ -15,6 +15,7 @@ typedef struct
 	u_int8_t rm;
 } InstDataProc1;
 
+/*
 typedef struct
 {
 	u_int8_t cond;
@@ -26,6 +27,22 @@ typedef struct
 	u_int8_t typ;
 	u_int8_t rm;
 } InstDataProc2;
+*/
+
+typedef struct
+{
+	u_int8_t cond;
+	u_int8_t p;
+	u_int8_t u;
+	u_int8_t i;
+	u_int8_t w;
+	u_int8_t l;
+	u_int8_t rn;
+	u_int8_t rd;
+	u_int8_t offset;
+	u_int8_t op;
+	u_int8_t rm;
+} InstMemSpecial;
 
 typedef struct
 {
@@ -217,7 +234,7 @@ typedef struct
 typedef union
 {
 	InstDataProc1  dp1;
-	InstDataProc2  dp2;
+	InstMemSpecial ms;
 	InstDataProc3  dp3;
 	InstPSRImm     psri;
 	InstPSRReg     psrr;
@@ -241,7 +258,7 @@ typedef union
 typedef enum
 {
 	IT_DATA_PROC1,
-	IT_DATA_PROC2,
+	IT_MEM_SPECIAL,
 	IT_DATA_PROC3,
 	IT_PSR_IMM,
 	IT_PSR_REG,

@@ -57,6 +57,14 @@ typedef struct
 typedef struct
 {
 	u_int8_t op;
+	u_int8_t ro;
+	u_int8_t rb;
+	u_int8_t rd;
+} InstTMemSpecial;
+
+typedef struct
+{
+	u_int8_t op;
 	u_int8_t nn;
 	u_int8_t rb;
 	u_int8_t rd;
@@ -127,6 +135,7 @@ typedef union
 	InstTHiReg      hr;
 	InstTLdrPc      lp;
 	InstTMemImm     mi;
+	InstTMemSpecial s;
 	InstTMemHalf    mh;
 	InstTMemSP      ms;
 	InstTRelative   r;
@@ -148,6 +157,7 @@ typedef enum
 	IT_T_HIREG,
 	IT_T_LDR_PC,
 	IT_T_MEM_IMM,
+	IT_T_MEM_SPECIAL,
 	IT_T_MEM_HALF,
 	IT_T_MEM_SP,
 	IT_T_RELATIVE,

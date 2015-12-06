@@ -47,17 +47,20 @@ bool DecodeInstruction(u_int32_t code, Instruction &instruction)
 					instruction.data.dp1.typ = (code >> 5) & 0x3;
 					instruction.data.dp1.rm = code & 0xF;
 				}
-				else // Probably DP2
+				else // Probably MemSpecial
 				{
-					instruction.type = IT_DATA_PROC2;
-					instruction.data.dp2.cond = code >> 28;
-					instruction.data.dp2.op = op;
-					instruction.data.dp2.s = s;
-					instruction.data.dp2.rn = (code >> 16) & 0xF;
-					instruction.data.dp2.rd = (code >> 12) & 0xF;
-					instruction.data.dp2.rs = (code >> 8) & 0xF;
-					instruction.data.dp2.typ = (code >> 5) & 0x3;
-					instruction.data.dp2.rm = code & 0xF;
+					instruction.type = IT_MEM_SPECIAL;
+					instruction.data.ms.cond = code >> 28;
+					instruction.data.ms.p = (code >> 24) & 1;
+					instruction.data.ms.u = (code >> 23) & 1;
+					instruction.data.ms.i = (code >> 22) & 1;
+					instruction.data.ms.w = (code >> 21) & 1;
+					instruction.data.ms.l = (code >> 20) & 1;
+					instruction.data.ms.rn = (code >> 16) & 0xF;
+					instruction.data.ms.rd = (code >> 12) & 0xF;
+					instruction.data.ms.offset = (((code >> 8) & 0xF) << 4) | (code & 0xF);
+					instruction.data.ms.op = (code >> 5) & 0x3;
+					instruction.data.ms.rm = code & 0xF;;
 				}
 			}
 			return true;
@@ -208,6 +211,74 @@ void PrintInstruction(const Instruction &instruction)
 			PrintRegister(dp1->rm);
 			std::cout << ' ' << shiftTypes[dp1->typ] << " #";
 			std::cout << (unsigned int) dp1->shift;
+			return;
+		}
+
+		case IT_MEM_SPECIAL:
+		{
+			const InstMemSpecial *ms = &instruction.data.ms;
+
+			if(ms->l == 0)
+			{
+				std::cout << (ms->op == 2 ? "ldr" : "str");
+				PrintCondition(ms->cond);
+				switch(ms->op)
+				{
+					case 1:
+						std::cout << "h";
+						break;
+					case 2:
+					case 3:
+						std::cout << "d";
+						break;
+					default:
+						std::cout << "!RESERVED!";
+				}
+			}
+			else
+			{
+				std::cout << "ldr";
+				PrintCondition(ms->cond);
+				switch(ms->op)
+				{
+					case 1:
+						std::cout << "h";
+						break;
+					case 2:
+						std::cout << "sb";
+						break;
+					case 3:
+						std::cout << "sh";
+						break;
+					default:
+						std::cout << "!RESERVED!";
+				}
+			}
+			std::cout << ' ';
+			PrintRegister(ms->rd);
+			std::cout << ", [";
+			PrintRegister(ms->rn);
+			if(ms->p)
+			{
+				std::cout << ", ";
+				std::cout << (ms->u ? '+' : '-');
+				if(ms->i)
+					std::cout << (int)ms->offset;
+				else
+					PrintRegister(ms->rm);
+				std::cout << ']';
+				if(ms->w)
+					std::cout << '!';
+			}
+			else
+			{
+				std::cout << "], ";
+				std::cout << (ms->u ? '+' : '-');
+				if(ms->i)
+					std::cout << (int)ms->offset;
+				else
+					PrintRegister(ms->rm);
+			}
 			return;
 		}
 

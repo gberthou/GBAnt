@@ -44,30 +44,51 @@ bool DecodeInstructionThumb(u_int16_t code, InstructionThumb &instruction)
 			return true;
 
 		case 2:
-			if(((code >> 11) & 0x3) == 1) // LDR PC
+		{
+			u_int8_t subop = (code >> 11) & 0x3;
+			if(subop == 0)
+			{
+				if(((code >> 10) & 0x7) == 1) // HiReg/BX
+				{
+					instruction.type = IT_T_HIREG;
+					instruction.data.hr.op = (code >> 8) & 0x3;
+					instruction.data.hr.rs = ((code & (1 << 6)) >> 3) | ((code >> 3) & 0x7);
+					instruction.data.hr.rd = ((code & (1 << 7)) >> 4) | (code & 0x7);
+					return true;
+				}
+				else if(((code >> 10) & 0x7) == 0) // AluOp
+				{
+					instruction.type = IT_T_ALU;
+					instruction.data.al.op = (code >> 6) & 0xF;
+					instruction.data.al.rs = (code >> 3) & 0x7;
+					instruction.data.al.rd = code & 0x7;
+					return true;
+				}
+			}
+			else if(subop == 1) // LDR PC
 			{
 				instruction.type = IT_T_LDR_PC;
 				instruction.data.lp.rd = (code >> 8) & 0x7;
 				instruction.data.lp.nn = code & 0xFF;
 				return true;
 			}
-			else if(((code >> 10) & 0x7) == 1) // HiReg/BX
+			else if(subop & 0x2)
 			{
-				instruction.type = IT_T_HIREG;
-				instruction.data.hr.op = (code >> 8) & 0x3;
-				instruction.data.hr.rs = ((code & (1 << 6)) >> 3) | ((code >> 3) & 0x7);
-				instruction.data.hr.rd = ((code & (1 << 7)) >> 4) | (code & 0x7);
-				return true;
-			}
-			else if(((code >> 10) & 0x7) == 0) // AluOp
-			{
-				instruction.type = IT_T_ALU;
-				instruction.data.al.op = (code >> 6) & 0xF;
-				instruction.data.al.rs = (code >> 3) & 0x7;
-				instruction.data.al.rd = code & 0x7;
-				return true;
+				if((code >> 9) & 1) // LDR/STR H/SB/SH
+				{
+					instruction.type = IT_T_MEM_SPECIAL;
+					instruction.data.s.op = (code >> 10) & 0x3;
+					instruction.data.s.ro = (code >> 6) & 0x7;
+					instruction.data.s.rb = (code >> 3) & 0x7;
+					instruction.data.s.rd = code & 0x7;
+					return true;
+				}
+				else // LDR/STR
+				{
+				}
 			}
 			break;
+		}
 
 		case 3:
 			instruction.type = IT_T_MEM_IMM;
@@ -238,6 +259,19 @@ void PrintInstructionThumb(u_int32_t pcv, const InstructionThumb &instruction)
 			PrintRegister(instruction.data.im.rd);
 			std::cout << ", #" << (int)instruction.data.im.nn;
 			return;
+
+		case IT_T_MEM_SPECIAL:
+		{
+			const std::string LABELS[] = {"strh", "ldrsb", "ldrh", "ldrsh"};
+			std::cout << LABELS[instruction.data.s.op] << ' ';
+			PrintRegister(instruction.data.s.rd);
+			std::cout << ", [";
+			PrintRegister(instruction.data.s.rb);
+			std::cout << ", ";
+			PrintRegister(instruction.data.s.ro);
+			std::cout << ']';
+			return;
+		}
 
 		case IT_T_MEM_IMM:
 		{

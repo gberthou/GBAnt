@@ -182,21 +182,94 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 					alu(dp1->op, dp1->s, dp1->rd, dp1->rn, op2, scarry, wrapper);
 				}
 				break;
-			case IT_DATA_PROC2:
-				if(testCondition(inst.data.dp2.cond))
+			case IT_MEM_SPECIAL:
+				if(testCondition(inst.data.ms.cond))
 				{
-					InstDataProc2 *dp2 = &inst.data.dp2;
-					u_int32_t rmv = regSet.GetValue(dp2->rm);
-					u_int32_t rsv = regSet.GetValue(dp2->rs) & 0xFF;
-					u_int32_t op2;
-					StatusBit scarry;
+					InstMemSpecial *ms = &inst.data.ms;
+					u_int32_t rdv = regSet.GetValue(ms->rd);
+					u_int32_t rnv = regSet.GetValue(ms->rn);
+					int32_t offset;
+					u_int32_t tmp;
 					
-					if(dp2->rm == PC)
-						rmv += 8;
+					//u_int32_t op2;
+					//StatusBit scarry;
 					
-					if(dp2->rs == PC)
-						rsv += 12;
+					std::cout << "MemSpecial" << std::endl;
+					
+					if(ms->rd == PC)
+						rdv += 8;
+					
+					if(ms->rn == PC)
+						rnv += 12;
 
+					if(ms->i) // immediate
+						offset = (ms->u ? ms->offset : -ms->offset);
+					else // register
+					{
+						u_int32_t rmv = regSet.GetValue(ms->rm);
+						offset = (ms->u ? rmv : -rmv);
+					}
+
+					if(ms->p) // pre
+						rnv += offset;
+
+					if(ms->l) // ldrXX
+					{
+						switch(ms->op)
+						{
+							case 1: // ldrh
+								mem.Read(rnv, tmp, MA32);
+								tmp &= 0xFFFF;
+								regSet.SetValue(ms->rd, tmp, &wrapper);
+								break;
+							case 2: // ldrsb
+								mem.Read(rnv, tmp, MA32);
+								tmp &= 0xFF;
+								tmp |= ((tmp >> 7) & 1) * 0xFFFFFF00;
+								regSet.SetValue(ms->rd, tmp, &wrapper);
+								break;
+							case 3: // ldrsh
+								mem.Read(rnv, tmp, MA32);
+								tmp &= 0xFFFF;
+								tmp |= ((tmp >> 15) & 1) * 0xFFFF0000;
+								regSet.SetValue(ms->rd, tmp, &wrapper);
+								break;
+							default:
+								std::cerr << "Reserved opcode" << std::endl;
+						}
+					}
+					else
+					{
+						switch(ms->op)
+						{
+							case 1: // strh
+								mem.Write(rnv, regSet.GetValue(ms->rd) & 0x0000FFFF);
+								break;
+							case 2: // ldrd
+							{
+								u_int32_t tmp1;
+								mem.Read(rnv, tmp, MA32);
+								mem.Read(rnv + 4, tmp1, MA32);
+								regSet.SetValue(ms->rd, tmp, &wrapper);
+								regSet.SetValue(ms->rd + 1, tmp1, &wrapper);
+								break;
+							}
+							case 3: // strd
+								mem.Write(rnv, regSet.GetValue(ms->rd));
+								mem.Write(rnv + 4, regSet.GetValue(ms->rd + 1));
+								break;
+							default:
+								std::cerr << "Reserved opcode" << std::endl;
+						}
+					}
+
+					if(ms->p == 0 || ms->w) // post and/or write-back
+					{
+						u_int32_t tmp = regSet.GetValue(ms->rn) + offset;
+						regSet.SetValue(ms->rn, tmp, &wrapper);
+					}
+
+					/* ???
 					switch(dp2->typ)
 					{
 						case 1:
@@ -217,6 +290,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 							break;
 					}
 					alu(dp2->op, dp2->s, dp2->rd, dp2->rn, op2, scarry, wrapper);
+					*/
 				}
 				break;
 
@@ -832,6 +906,38 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 				break;
 			}
 
+			case IT_T_MEM_SPECIAL:
+			{
+				const InstTMemSpecial *s = &inst.data.s;
+				u_int32_t rdv = regSet.GetValue(s->rd);
+				u_int32_t address = regSet.GetValue(s->rb) + regSet.GetValue(s->ro);
+				u_int32_t tmp;
+
+				switch(s->op)
+				{
+					case 0: // strh
+						mem.Write(address, rdv & 0xFFFF);
+						break;
+					case 1: // ldrsb
+						mem.Read(address, tmp, MA32);
+						tmp &= 0xFF;
+						tmp |= ((tmp >> 7) & 1) * 0xFFFFFF00;
+						regSet.SetValue(s->rd, tmp, &wrapper);
+						break;
+					case 2: // ldrh
+						mem.Read(address, tmp, MA32);
+						regSet.SetValue(s->rd, tmp & 0xFFFF, &wrapper);
+						break;
+					default: // ldrsh
+						mem.Read(address, tmp, MA32);
+						tmp &= 0xFFFF;
+						tmp |= ((tmp >> 15) & 1) * 0xFFFF0000;
+						regSet.SetValue(s->rd, tmp, &wrapper);
+						break;
+				}
+				break;
+			}
+
 			case IT_T_MEM_IMM:
 			{
 				const InstTMemImm *mi = &inst.data.mi;
@@ -949,23 +1055,7 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 
 			case IT_T_SVC:
 			{
-				break;
-				regSet.SetMode(RS_SUPERVISOR);
-				std::cout << "Entering supervisor mode" << std::endl;
-				/*
-				// Software interrupt address = BASE + 0x08
-				mem.Read(baseAddress + (inst.data.svc.op << 2) + 8, pcValue);
-				//pcValue += baseAddress;
-				std::cout << "@";
-				PrintHex(baseAddress + (inst.data.svc.op << 2) + 8);
-				std::cout << ": ";
-				PrintHex(pcValue);
-				std::cout << std::endl;
-				*/
-
-				thumbMode = false;
-				pcValue = baseAddress + 0x08;
-
+				biosCall(inst.data.svc.op);
 				break;
 			}
 
@@ -1077,5 +1167,74 @@ u_int32_t ARMcpu::loadstore(unsigned int reg, u_int16_t registers, bool pclr, bo
 	std::cout << std::endl;
 
 	return finalAddress;
+}
+
+void ARMcpu::biosCall(u_int8_t op)
+{
+	switch(op)
+	{
+		//case 0x4: // IntrWait
+
+		//	break;
+
+		case 0x5: // VBlankIntrWait
+			mem.Write(0x4000208, 0); // Enable IME
+			regSet.SetValue(R0, 1, 0);
+			regSet.SetValue(R1, 1, 0);
+			biosCall(0x4);
+			break;
+
+		case 0xb: // CpuSet
+		{
+			u_int32_t src = regSet.GetValue(R0);
+			u_int32_t dst = regSet.GetValue(R1);
+			u_int32_t params = regSet.GetValue(R2);
+			u_int32_t count = params & 0x1FFFFF;
+			bool word = (params & (1 << 26)) != 0;
+			MemoryAccess memAccess = (word ? MA32 : MA16);
+
+			// Debug
+			std::cout << "mem";
+			if(params & (1<<24))
+				std::cout << "fill";
+			else
+				std::cout << "cpy";
+			if(!word)
+				std::cout << "16";
+			std::cout << std::endl << "  src   = ";
+			PrintHex(src);
+			std::cout << std::endl << "  dst   = ";
+			PrintHex(dst);
+			std::cout << std::endl << "  count = " << count;
+			std::cout << std::endl;
+			
+			// Execution
+			if(word)
+			{
+				src &= 0xFFFFFFFC;
+				dst &= 0xFFFFFFFC;
+			}
+			else
+			{
+				src &= 0xFFFFFFFE;
+				dst &= 0xFFFFFFFE;
+			}
+
+			for(u_int32_t i = 0; i < count; ++i)
+			{
+				u_int32_t tmp;
+				mem.Read(src, tmp, memAccess);
+				mem.Write(dst, tmp, memAccess);
+
+				if(!(params & (1<<24))) // cpy
+					src += (word ? 4 : 2);
+				dst += (word ? 4 : 2);
+			}
+			break;
+		}
+
+		default:
+			std::cerr << "Unknown SVC command " << (unsigned int) op << std::endl;
+	}
 }
 
