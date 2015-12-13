@@ -76,6 +76,7 @@ void Lcd::Trigger(void)
 
 void Lcd::OnClock(void)
 {
+	std::cout << "tick" << std::endl;
 	++cmpt;
 	lcd.vcount = (lcd.vcount + cmpt / VBLANK_STEP_CYCLE_COUNT) & 0xFF;
 	cmpt %= VBLANK_STEP_CYCLE_COUNT;
@@ -101,7 +102,7 @@ bool Lcd::MustTriggerInterrupt(GBA_InterruptSource source)
 		return vblank;
 	else if(source == GBA_IS_LCD_HBLANK)
 		return hblank;
-	else if(source == GBA_IS_LCD_VCOUNTER_MATCH)
+	else if(source == GBA_IS_LCD_VCOUNTER)
 		return vcounter;
 	return false;
 }

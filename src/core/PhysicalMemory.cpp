@@ -1,3 +1,4 @@
+#include <iostream>
 #include <cstring>
 
 #include "PhysicalMemory.h"
@@ -73,6 +74,9 @@ bool PhysicalMemory::Read(u_int32_t address, u_int32_t &value, MemoryAccess memA
 
 bool PhysicalMemory::CopyToMemory(u_int32_t dstAddress, const void *src, size_t size)
 {
+	if(size == 0)
+		return true;
+
 	if(dstAddress >= bAddress && dstAddress <= eAddress && dstAddress + size - 1 <= eAddress)
 	{
 		memcpy(data + ((dstAddress - bAddress) >> 2), src, size);

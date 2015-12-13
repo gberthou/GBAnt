@@ -62,6 +62,7 @@ static void printRegisters(const RegisterSet &regSet, u_int8_t rlist)
 
 ARMcpu::ARMcpu(u_int32_t bAddress):
 	thumbMode(false),
+	halted(false),
 	cycles(0),
 	baseAddress(bAddress),
 	mem(0, 0x0FFFFFFF)
@@ -72,53 +73,38 @@ ARMcpu::~ARMcpu()
 {
 }
 
-void ARMcpu::Run(void)
+void ARMcpu::RunNextInstruction(void)
 {
-	bool lock = false;
-	for(;;)
+	if(!halted)
 	{
-		/*
-		u_int32_t pcvalue = regSet.GetValue(PC);
-		if(pcvalue == 0x18 // BIOS interrupt routine
-		|| pcvalue == 0x08043980)
-			lock = true;
-		*/
-		runStep();
+		u_int32_t pcValue = regSet.GetValue(PC);
 
-		if(lock)
-			getchar();
+		if(!thumbMode)
+		{
+			u_int32_t inst;
+
+			mem.Read(pcValue, inst);
+
+			std::cout << "@";
+			PrintHex(pcValue);
+			std::cout << ": ";
+			executeInstruction(inst);
+			std::cout << std::endl;
+		}
+		else
+		{
+			u_int32_t inst;
+
+			mem.Read(pcValue, inst, MA16);
+
+			std::cout << "@";
+			PrintHex(pcValue);
+			std::cout << ": ";
+			executeInstructionThumb(inst);
+			std::cout << std::endl;
+		}
+
 	}
-}
-
-void ARMcpu::runStep(void)
-{
-	u_int32_t pcValue = regSet.GetValue(PC);
-
-	if(!thumbMode)
-	{
-		u_int32_t inst;
-
-		mem.Read(pcValue, inst);
-
-		std::cout << "@";
-		PrintHex(pcValue);
-		std::cout << ": ";
-		executeInstruction(inst);
-		std::cout << std::endl;
-	}
-	else
-	{
-		u_int32_t inst;
-
-		mem.Read(pcValue, inst, MA16);
-
-		std::cout << "@";
-		PrintHex(pcValue);
-		std::cout << ": ";
-		executeInstructionThumb(inst);
-		std::cout << std::endl;
-	}
-
 	onClock();
 }
 
@@ -129,6 +115,9 @@ void ARMcpu::onClock(void)
 
 bool ARMcpu::interruptsEnabled(void)
 {
+	std::cout << "CPSR: ";
+	PrintHex(regSet.GetValue(CPSR));
+	std::cout << std::endl;
 	return (regSet.GetValue(CPSR) & (1 << 7)) == 0;
 }
 
@@ -313,7 +302,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 
 					if(psrr->l) // MSR
 					{
-						u_int32_t rdv = regSet.GetValue(psrr->rd);
+						u_int32_t rmv = regSet.GetValue(psrr->rm);
 						for(unsigned int i = 0; i < 4; ++i)
 						{
 							if(psrr->field & (1 << i))
@@ -322,7 +311,7 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 								// Clear field
 								value &= ~mask;
 								// Set field
-								value |= (rdv & mask);
+								value |= (rmv & mask);
 							}
 						}
 						regSet.SetValue(reg, value, 0);
@@ -396,6 +385,8 @@ void ARMcpu::executeInstruction(u_int32_t instruction)
 						}
 						std::cout << "Loading value ";
 						PrintHex(value);
+						std::cout << " @";
+						PrintHex(address);
 						std::cout << std::endl;
 						regSet.SetValue(inst.data.ti9.rd, value, &wrapper);
 					}
@@ -1055,7 +1046,15 @@ void ARMcpu::executeInstructionThumb(u_int16_t instruction)
 
 			case IT_T_SVC:
 			{
-				biosCall(inst.data.svc.op);
+				//biosCall(inst.data.svc.op);		
+			
+				u_int32_t cpsr = regSet.GetValue(CPSR);
+				regSet.SetMode(RS_SVC);
+				regSet.SetValue(LR_SVC, pcValue + 4, 0);
+				regSet.SetValue(SP_SVC, cpsr, 0);
+				regSet.SetValue(CPSR, 0x00000013, 0); // Set SVC mode
+				wrapper.Set(0x00000008); // Jump to SWI vector address (bios)
+				thumbMode = false;
 				break;
 			}
 
@@ -1169,72 +1168,23 @@ u_int32_t ARMcpu::loadstore(unsigned int reg, u_int16_t registers, bool pclr, bo
 	return finalAddress;
 }
 
-void ARMcpu::biosCall(u_int8_t op)
+void ARMcpu::halt(u_int32_t flagsToWaitFor)
 {
-	switch(op)
+	halted = true;
+	haltFlags = flagsToWaitFor;
+
+	std::cout << "CPU halted with flags ";
+	PrintHex(flagsToWaitFor);
+	std::cout << std::endl;
+}
+
+bool ARMcpu::tryToResume(GBA_InterruptSource interruptSource)
+{
+	if(haltFlags & interruptSource)
 	{
-		//case 0x4: // IntrWait
-
-		//	break;
-
-		case 0x5: // VBlankIntrWait
-			mem.Write(0x4000208, 0); // Enable IME
-			regSet.SetValue(R0, 1, 0);
-			regSet.SetValue(R1, 1, 0);
-			biosCall(0x4);
-			break;
-
-		case 0xb: // CpuSet
-		{
-			u_int32_t src = regSet.GetValue(R0);
-			u_int32_t dst = regSet.GetValue(R1);
-			u_int32_t params = regSet.GetValue(R2);
-			u_int32_t count = params & 0x1FFFFF;
-			bool word = (params & (1 << 26)) != 0;
-			MemoryAccess memAccess = (word ? MA32 : MA16);
-
-			// Debug
-			std::cout << "mem";
-			if(params & (1<<24))
-				std::cout << "fill";
-			else
-				std::cout << "cpy";
-			if(!word)
-				std::cout << "16";
-			std::cout << std::endl << "  src   = ";
-			PrintHex(src);
-			std::cout << std::endl << "  dst   = ";
-			PrintHex(dst);
-			std::cout << std::endl << "  count = " << count;
-			std::cout << std::endl;
-			
-			// Execution
-			if(word)
-			{
-				src &= 0xFFFFFFFC;
-				dst &= 0xFFFFFFFC;
-			}
-			else
-			{
-				src &= 0xFFFFFFFE;
-				dst &= 0xFFFFFFFE;
-			}
-
-			for(u_int32_t i = 0; i < count; ++i)
-			{
-				u_int32_t tmp;
-				mem.Read(src, tmp, memAccess);
-				mem.Write(dst, tmp, memAccess);
-
-				if(!(params & (1<<24))) // cpy
-					src += (word ? 4 : 2);
-				dst += (word ? 4 : 2);
-			}
-			break;
-		}
-
-		default:
-			std::cerr << "Unknown SVC command " << (unsigned int) op << std::endl;
+		halted = false;
+		return true;
 	}
+	return false;
 }
 

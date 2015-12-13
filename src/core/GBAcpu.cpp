@@ -2,21 +2,24 @@
 #include <fstream>
 
 #include "GBAcpu.h"
+#include "MirrorMemory.h"
 #include "../peripherals/peripherals.h"
 
 #define GBA_ROM_LOADER_BUF_SIZE 1024
 
-const u_int32_t GBA_BASE_ADDRESS = 0x08000000;
-const u_int32_t GBA_IME          = 0x04000208;
-const u_int32_t GBA_IE           = 0x04000200;
-const u_int32_t GBA_IF           = 0x04000202;
+const u_int32_t GBA_BIOS_BASE_ADDRESS = 0x00000000;
+const u_int32_t GBA_BASE_ADDRESS      = 0x08000000;
+const u_int32_t GBA_IME               = 0x04000208;
+const u_int32_t GBA_IE                = 0x04000200;
+const u_int32_t GBA_IF                = 0x04000202;
 
 GBAcpu::GBAcpu():
 	ARMcpu(GBA_BASE_ADDRESS)
 {
-	mem.AddMemory(new PhysicalMemory(0x00000018, 0x00003FFF)); // BIOS - 16 kB
+	mem.AddMemory(bios = new PhysicalMemory(0x00000000, 0x00003FFF)); // BIOS - 16 kB
 	mem.AddMemory(new PhysicalMemory(0x02000000, 0x0203FFFF)); // WRAM - 256 kB
 	mem.AddMemory(new PhysicalMemory(0x03000000, 0x03007FFF)); // WRAM - 32 kB
+	mem.AddMemory(new MirrorMemory(0x03FFFF00, 0x03FFFFFF, 0x03007F00, mem)); // Mirrored memory used in IRQs
 	mem.AddMemory(new PhysicalMemory(0x05000000, 0x050003FF)); // BG - 1 kB
 	mem.AddMemory(new PhysicalMemory(0x06000000, 0x06017FFF)); // VRAM - 96 kB
 	mem.AddMemory(new PhysicalMemory(0x07000000, 0x070003FF)); //OAM - 1 kB
@@ -42,71 +45,22 @@ GBAcpu::GBAcpu():
 	mem.Write(0x00000138, 0xe8bd500f);
 	mem.Write(0x0000013C, 0xe25ef004);
 	mem.Write(0x00000140, 0x03008000);
+	
+	regSet.SetMode(RS_USER);
+	regSet.SetValue(PC, GBA_BASE_ADDRESS, 0);
+	regSet.SetValue(SP, 0, 0); // TODO: change value
+	regSet.SetValue(CPSR, 0, 0); // TODO: change value
 }
 
 GBAcpu::~GBAcpu()
 {
 }
 
-bool GBAcpu::LoadGBA(const char *filename)
-{
-	if(cartridge)
-	{
-		std::ifstream file(filename, std::ios::in | std::ios::binary);
-		if(file.is_open())
-		{
-			u_int32_t address = GBA_BASE_ADDRESS;
-			char buf[GBA_ROM_LOADER_BUF_SIZE];
-			bool ok = true;
-			while(!file.eof() && ok)
-			{
-				file.read(buf, GBA_ROM_LOADER_BUF_SIZE);
-				ok = cartridge->CopyToMemory(address, buf, GBA_ROM_LOADER_BUF_SIZE);
-				if(!ok)
-				{
-					std::cerr << "GBA ROM is too large and exceeds allocated GamePak memory" << std::endl;
-				}
-				address += GBA_ROM_LOADER_BUF_SIZE;
-			}
-			file.close();
-			return ok;
-		}
-
-		std::cerr << "Cannot read GBA ROM file: " << filename << std::endl;
-		std::cerr << "Please check that the file exist or that user has correct access rights" << std::endl;
-		return false;
-	}
-
-	std::cerr << "Cannot load GBA ROM file because cartridge memory is not allocated..." << std::endl;
-	return false;
-}
-
-void GBAcpu::Run(void)
-{
-	regSet.SetMode(RS_USER);
-	regSet.SetValue(PC, GBA_BASE_ADDRESS, 0);
-	regSet.SetValue(SP, 0, 0); // TODO: change value
-	regSet.SetValue(CPSR, 0, 0); // TODO: change value
-	ARMcpu::Run();
-}
-
-void GBAcpu::TriggerInterrupt(GBA_InterruptSource source)
-{
-	u_int32_t ie;
-	mem.Read(GBA_IE, ie);
-	if((ie >> source) & 1) // Interrupts are enabled for this particular source
-	{
-		u_int32_t ifvalue;
-		mem.Read(GBA_IF, ifvalue);
-		ifvalue |= (1 << source);
-		mem.Write(GBA_IF, ifvalue); // Update interrupt flags
-	}
-}
-
-void GBAcpu::runStep(void)
+void GBAcpu::RunNextInstruction(void)
 {
 	if(interruptsEnabled())
 	{
+		std::cout << "Interrupts Enabled!!" << std::endl;
 		// TODO: Check all interrupt sources
 	
 		// LCD
@@ -121,13 +75,44 @@ void GBAcpu::runStep(void)
 		{
 			std::cout << "HBLANK IRQ HAPPENS NOW!" << std::endl;
 		}
-		if(lcd->MustTriggerInterrupt(GBA_IS_LCD_VCOUNTER_MATCH))
+		if(lcd->MustTriggerInterrupt(GBA_IS_LCD_VCOUNTER))
 		{
 			std::cout << "VCOUNTER IRQ HAPPENS NOW!" << std::endl;
 		}
 	}
 
-	ARMcpu::runStep();
+	ARMcpu::RunNextInstruction();
+}
+
+bool GBAcpu::LoadBios(const char *filename)
+{
+	if(bios)
+		return loadFileToMemory(filename, bios, GBA_BIOS_BASE_ADDRESS);
+
+	std::cerr << "Cannot load GBA Bios file because bios memory is not allocated..." << std::endl;
+	return false;
+}
+
+bool GBAcpu::LoadGBA(const char *filename)
+{
+	if(cartridge)
+		return loadFileToMemory(filename, cartridge, GBA_BASE_ADDRESS);
+
+	std::cerr << "Cannot load GBA ROM file because cartridge memory is not allocated..." << std::endl;
+	return false;
+}
+
+void GBAcpu::TriggerInterrupt(GBA_InterruptSource source)
+{
+	u_int32_t ie;
+	mem.Read(GBA_IE, ie);
+	if(ie & source) // Interrupts are enabled for this particular source
+	{
+		u_int32_t ifvalue;
+		mem.Read(GBA_IF, ifvalue);
+		ifvalue |= source;
+		mem.Write(GBA_IF, ifvalue); // Update interrupt flags
+	}
 }
 
 void GBAcpu::onClock(void)
@@ -146,6 +131,123 @@ bool GBAcpu::interruptsEnabled(void)
 		return (ime & 1) != 0;
 	}
 	return false;
+}
+
+bool GBAcpu::loadFileToMemory(const char *filename, PhysicalMemory *memory, u_int32_t baseAddress)
+{
+	std::ifstream file(filename, std::ios::in | std::ios::binary);
+	if(file.is_open())
+	{
+		u_int32_t address = baseAddress;
+		char buf[GBA_ROM_LOADER_BUF_SIZE];
+		bool ok = true;
+		while(!file.eof() && ok)
+		{
+			file.read(buf, GBA_ROM_LOADER_BUF_SIZE);
+			ok = memory->CopyToMemory(address, buf, file.gcount());
+			if(!ok)
+			{
+				std::cerr << "File '" << filename << "' is too large and exceeds allocated GBA memory" << std::endl;
+			}
+			address += GBA_ROM_LOADER_BUF_SIZE;
+		}
+		file.close();
+		return ok;
+	}
+
+	std::cerr << "Cannot read file: " << filename << std::endl;
+	std::cerr << "Please check that the file exist or that user has correct access rights" << std::endl;
+	return false;
+}	
+
+void GBAcpu::biosCall(u_int8_t op)
+{
+	switch(op)
+	{
+		case 0x4:
+			biosIntrWait();
+			break;
+
+		case 0x5:
+			biosVBlankIntrWait();
+			break;
+
+		case 0xb:
+			biosCpuSet();
+			break;
+
+		default:
+			std::cerr << "Unknown SVC command " << (unsigned int) op << std::endl;
+	}
+}
+
+void GBAcpu::biosIntrWait(void)
+{
+	if(regSet.GetValue(R0) == 0)
+	{
+		u_int32_t iflags;
+		mem.Read(GBA_IF, iflags, MA16);
+		if(iflags != 0)
+			return;
+	}
+	mem.Write(GBA_IF, 0, MA16);
+	halt(regSet.GetValue(R1));
+}
+
+void GBAcpu::biosVBlankIntrWait(void)
+{
+	mem.Write(0x4000208, 0); // Enable IME
+	regSet.SetValue(R0, 1, 0);
+	regSet.SetValue(R1, 1, 0);
+	biosCall(0x4);
+}
+
+void GBAcpu::biosCpuSet(void)
+{
+	u_int32_t src = regSet.GetValue(R0);
+	u_int32_t dst = regSet.GetValue(R1);
+	u_int32_t params = regSet.GetValue(R2);
+	u_int32_t count = params & 0x1FFFFF;
+	bool word = (params & (1 << 26)) != 0;
+	MemoryAccess memAccess = (word ? MA32 : MA16);
+
+	// Debug
+	std::cout << "mem";
+	if(params & (1<<24))
+		std::cout << "fill";
+	else
+		std::cout << "cpy";
+	if(!word)
+		std::cout << "16";
+	std::cout << std::endl << "  src   = ";
+	PrintHex(src);
+	std::cout << std::endl << "  dst   = ";
+	PrintHex(dst);
+	std::cout << std::endl << "  count = " << count;
+	std::cout << std::endl;
+	
+	// Execution
+	if(word)
+	{
+		src &= 0xFFFFFFFC;
+		dst &= 0xFFFFFFFC;
+	}
+	else
+	{
+		src &= 0xFFFFFFFE;
+		dst &= 0xFFFFFFFE;
+	}
+
+	for(u_int32_t i = 0; i < count; ++i)
+	{
+		u_int32_t tmp;
+		mem.Read(src, tmp, memAccess);
+		mem.Write(dst, tmp, memAccess);
+
+		if(!(params & (1<<24))) // cpy
+			src += (word ? 4 : 2);
+		dst += (word ? 4 : 2);
+	}
 }
 
 bool GBAcpu::RunTestStack(void)

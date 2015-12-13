@@ -5,6 +5,7 @@
 #include "MemoryContainer.h"
 #include "PhysicalMemory.h"
 #include "DataWrapper.h"
+#include "irq.h"
 
 enum StatusBit
 {
@@ -19,12 +20,12 @@ class ARMcpu
 		ARMcpu(u_int32_t baseAddress);
 		virtual ~ARMcpu();
 
-		virtual void Run(void);
+		virtual void RunNextInstruction(void);
 
 	protected:
-		virtual void runStep(void);
 		virtual void onClock(void);
 		virtual bool interruptsEnabled(void);
+		virtual void biosCall(u_int8_t op) = 0; // svc calls
 		
 		void executeInstruction(u_int32_t instruction);
 		void alu(u_int8_t op, u_int8_t s, u_int8_t rd, u_int8_t rn, u_int32_t op2, StatusBit shiftCarry, DataWrapper &pcValue);
@@ -34,9 +35,12 @@ class ARMcpu
 		void updateStatus(u_int32_t x, StatusBit carry, StatusBit overflow);
 		bool testCondition(u_int8_t condition);
 		u_int32_t loadstore(unsigned int reg, u_int16_t registers, bool pclr, bool r16, bool load, bool increment, bool after, DataWrapper &pcwrapper);
-		void biosCall(u_int8_t op); // svc calls
+		void halt(u_int32_t flagsToWaitFor);
+		bool tryToResume(GBA_InterruptSource interruptSource);
 
 		bool thumbMode;
+		bool halted;
+		u_int32_t haltFlags;
 		RegisterSet regSet;
 		u_int32_t cycles;
 

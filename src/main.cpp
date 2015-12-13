@@ -9,12 +9,13 @@
 int main(int argc, char **argv)
 {
 	(void) argv;
-	if(argc > 1)
+	if(argc > 2)
 	{
 		GBAcpu cpu;
-		if(cpu.LoadGBA(argv[1]))
+		if(cpu.LoadBios(argv[2]) && cpu.LoadGBA(argv[1]))
 		{
-			cpu.Run();
+			for(;;)
+				cpu.RunNextInstruction();
 		}
 	}
 

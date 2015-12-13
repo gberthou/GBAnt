@@ -337,9 +337,10 @@ void PrintInstruction(const Instruction &instruction)
 		}
 
 		case IT_BRANCH:
-			std::cout << "b";
+			std::cout << 'b';
 			if(instruction.data.b.l)
-				std::cout << "l";
+				std::cout << 'l';
+			PrintCondition(instruction.data.b.cond);
 			std::cout << " #" << instruction.data.b.offset;
 			return;
 

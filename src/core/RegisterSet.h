@@ -9,7 +9,7 @@ enum ARMRegSet
 {
 	RS_USER,
 	RS_FIQ,
-	RS_SUPERVISOR,
+	RS_SVC,
 	RS_ABORT,
 	RS_IRQ,
 	RS_UNDEFINED,

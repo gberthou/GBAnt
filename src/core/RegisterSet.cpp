@@ -42,6 +42,13 @@ u_int32_t &RegisterSet::getReg(unsigned int regId)
 				return registers[SPSR_FIQ];
 			break;
 		
+		case RS_SVC:
+			if(regId == SP || regId == LR)
+				return registers[regId + SP_SVC];
+			if(regId == SPSR)
+				return registers[SPSR_SVC];
+			break;
+		
 		case RS_IRQ:
 			if(regId == SP || regId == LR)
 				return registers[regId + SP_IRQ];
@@ -53,13 +60,5 @@ u_int32_t &RegisterSet::getReg(unsigned int regId)
 			break;
 	}
 	return registers[regId];
-
-	/*
-	RS_SUPERVISOR,
-	RS_ABORT,
-	RS_IRQ,
-	RS_UNDEFINED,
-	RS_COUNT
-	*/
 }
 

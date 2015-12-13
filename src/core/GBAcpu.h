@@ -11,19 +11,30 @@ class GBAcpu : public ARMcpu
 		GBAcpu();
 		virtual ~GBAcpu();
 
+		virtual void RunNextInstruction(void);
+		
+		bool LoadBios(const char *filename);		
 		bool LoadGBA(const char *filename);		
-		virtual void Run(void);
-
+		
 		void TriggerInterrupt(GBA_InterruptSource source);
 
 		// TESTS
 		bool RunTestStack(void);
 
 	protected:
-		virtual void runStep(void);
 		virtual void onClock(void);
 		virtual bool interruptsEnabled(void);
+		
+		bool loadFileToMemory(const char *filename, PhysicalMemory *memory, u_int32_t baseAddress);		
+		
+		// BIOS
+		virtual void biosCall(u_int8_t op);
+		void biosIntrWait(void);
+		void biosVBlankIntrWait(void);
+		void biosCpuSet(void);
 
+
+		PhysicalMemory *bios;
 		PhysicalMemory *cartridge;
 		
 		// Peripherals
